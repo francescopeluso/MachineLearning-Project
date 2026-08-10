@@ -1,0 +1,5 @@
+{
+  "best_threshold": 0.15,
+  "best_validation_dice": 0.6462,
+  "note": "I valori completi per soglia sono visibili nel grafico della prima run; le prossime run li salvano anche in CSV/JSON."
+}

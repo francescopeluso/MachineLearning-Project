@@ -1,0 +1,58 @@
+\documentclass[12pt,a4paper]{article}
+
+% Basic document settings
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
+
+% Front-page information
+\newcommand{\university}{University of Salerno}
+\newcommand{\degreecourse}{MSc in Computer Engineering}
+\newcommand{\reporttitle}{Solar Filament Segmentation}
+\newcommand{\teamname}{2026\_MLrec\_gr02}
+\newcommand{\members}{Francesco Peluso}
+\newcommand{\academicyear}{2025/2026}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+
+  {\Large \university\par}
+  \vspace{0.4cm}
+  {\large \degreecourse\par}
+
+  \vfill
+
+  {\Huge\bfseries \reporttitle\par}
+  \vspace{0.5cm}
+  {\Large Machine Learning Project Report\par}
+
+  \vfill
+
+  {\large
+    \textbf{Team}\par
+    \teamname\par
+    \vspace{0.6cm}
+    \textbf{Members}\par
+    \members\par
+  }
+
+  \vfill
+
+  {\large Academic Year \academicyear\par}
+\end{titlepage}
+
+\include{chapters/chapter_1}
+\include{chapters/chapter_2}
+
+\end{document}

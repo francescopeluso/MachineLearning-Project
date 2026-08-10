@@ -1,0 +1,99 @@
+# -----------------------------------------------------------------------------
+# Data: competition data must not be committed.
+# Keep reproducible split manifests (for example splits/*.csv) outside dataset/.
+# -----------------------------------------------------------------------------
+dataset/
+data/
+datasets/
+external_data/
+
+# Model checkpoints and experiment artifacts
+checkpoints/
+models/
+weights/
+artifacts/
+outputs/
+predictions/
+submissions/
+runs/
+wandb/
+mlruns/
+lightning_logs/
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.h5
+*.hdf5
+*.joblib
+*.pkl
+
+# Generated arrays, archives, and temporary exports
+*.npy
+*.npz
+*.parquet
+*.feather
+*.zip
+*.tar
+*.tar.gz
+*.7z
+tmp/
+temp/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Jupyter / IPython
+.ipynb_checkpoints/
+.ipython/
+profile_default/
+
+# LaTeX build products (sources, bibliography, and figures remain tracked)
+docs/*.aux
+docs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.lof
+docs/*.log
+docs/*.lot
+docs/*.out
+docs/*.run.xml
+docs/*.synctex.gz
+docs/*.toc
+docs/*.xdv
+docs/main.pdf
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local secrets and service credentials
+*.pem
+*.key
+credentials*.json
+kaggle.json

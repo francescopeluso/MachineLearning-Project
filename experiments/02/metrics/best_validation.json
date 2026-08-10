@@ -1,0 +1,7 @@
+{
+  "best_epoch": 10,
+  "best_validation_dice": 0.645699801597369,
+  "monitor": "validation_dice",
+  "patience": 8,
+  "min_delta": 0.001
+}

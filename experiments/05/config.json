@@ -1,0 +1,47 @@
+{
+  "experiment_id": "05",
+  "model": "U-Net with pre-trained ResNet18 encoder (ImageNet)",
+  "description": "Two-stage fine-tuning: exp 03 weights, native crops, lr reduced to 1e-5",
+  "init_from": "experiments/03/checkpoints/best_model.pt",
+  "in_channels": 3,
+  "encoder": "ResNet18 (ImageNet1K_V1)",
+  "trainable_parameters": 14343425,
+  "training_input": "random 512x512 native crops, 80% with filament (max 10 attempts)",
+  "validation_protocol": "4x4 grid of 512x512 tiles, 2048x2048 recomposition, Dice at 512x512 and native",
+  "image_size": [
+    512,
+    512
+  ],
+  "batch_size": 2,
+  "epochs": 10,
+  "early_stopping": {
+    "monitor": "validation_dice",
+    "mode": "max",
+    "patience": 4,
+    "min_delta": 0.001
+  },
+  "optimizer": "AdamW",
+  "learning_rate": 1e-05,
+  "weight_decay": 0.0001,
+  "loss": "0.5 * BCEWithLogitsLoss + 0.5 * DiceLoss",
+  "seed": 22,
+  "split_fractions": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15000000000000005
+  },
+  "unique_files_per_split": {
+    "train": 494,
+    "validation": 106,
+    "test": 107
+  },
+  "coco_records_per_split": {
+    "train": 806,
+    "validation": 169,
+    "test": 179
+  },
+  "device": "mps",
+  "python_version": "3.14.3",
+  "pytorch_version": "2.12.0",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+}

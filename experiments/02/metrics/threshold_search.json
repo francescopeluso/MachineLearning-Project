@@ -1,0 +1,74 @@
+{
+  "best_threshold": 0.699999988079071,
+  "best_validation_dice": 0.6461812853813171,
+  "scores": [
+    {
+      "threshold": 0.10000000149011612,
+      "validation_dice": 0.6376025676727295
+    },
+    {
+      "threshold": 0.15000000596046448,
+      "validation_dice": 0.6396166086196899
+    },
+    {
+      "threshold": 0.20000000298023224,
+      "validation_dice": 0.640982985496521
+    },
+    {
+      "threshold": 0.25,
+      "validation_dice": 0.6426097750663757
+    },
+    {
+      "threshold": 0.30000001192092896,
+      "validation_dice": 0.6434378027915955
+    },
+    {
+      "threshold": 0.3499999940395355,
+      "validation_dice": 0.644415020942688
+    },
+    {
+      "threshold": 0.4000000059604645,
+      "validation_dice": 0.6450414061546326
+    },
+    {
+      "threshold": 0.44999998807907104,
+      "validation_dice": 0.6455463767051697
+    },
+    {
+      "threshold": 0.5,
+      "validation_dice": 0.6456997990608215
+    },
+    {
+      "threshold": 0.550000011920929,
+      "validation_dice": 0.6456623077392578
+    },
+    {
+      "threshold": 0.6000000238418579,
+      "validation_dice": 0.6458439826965332
+    },
+    {
+      "threshold": 0.6499999761581421,
+      "validation_dice": 0.6458704471588135
+    },
+    {
+      "threshold": 0.699999988079071,
+      "validation_dice": 0.6461812853813171
+    },
+    {
+      "threshold": 0.75,
+      "validation_dice": 0.6456578969955444
+    },
+    {
+      "threshold": 0.800000011920929,
+      "validation_dice": 0.6447708606719971
+    },
+    {
+      "threshold": 0.8500000238418579,
+      "validation_dice": 0.6443192958831787
+    },
+    {
+      "threshold": 0.8999999761581421,
+      "validation_dice": 0.6421995759010315
+    }
+  ]
+}

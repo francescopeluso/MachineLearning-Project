@@ -1,0 +1,388 @@
+\section{Esperimenti}
+\label{sec:experiments}
+
+\subsection{Esperimento 1 -- U-Net addestrata da zero con AdamW}
+\label{sec:experiment-1}
+
+Il primo esperimento definisce una baseline per i confronti successivi.
+La U-Net descritta nella Sezione~\ref{sec:unet} è stata inizializzata con
+pesi casuali, senza modelli preaddestrati.
+
+Le immagini H-alpha sono state convertite in scala di grigi e ridimensionate
+da $2048 \times 2048$ a $512 \times 512$ pixel. Durante il training sono
+state applicate, sia all'immagine sia alla maschera, riflessioni orizzontali
+e verticali e rotazioni multiple di $90^\circ$. Lo split, effettuato sui nomi
+dei file univoci per evitare leakage tra annotazioni della stessa osservazione,
+è composto da 494 immagini per il training, 106 per la validation e 107 per
+il test interno.
+
+La rete ha un canale di ingresso, 16 filtri nel primo livello e
+$1\,942\,289$ parametri addestrabili. È stata addestrata per 20 epoche con
+batch size 2, AdamW ($\mathrm{lr}=10^{-3}$ e weight decay $10^{-4}$) e una
+loss pari alla media tra Binary Cross-Entropy e soft Dice loss.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../experiments/01/plots/training_curves.png}
+    \caption{Andamento di loss e Dice sui set di training e validation
+    nell'Esperimento 1.}
+    \label{fig:experiment-1-training}
+\end{figure}
+
+Come mostrato nella Figura~\ref{fig:experiment-1-training}, la maggior parte
+del miglioramento avviene nelle prime epoche; in seguito le prestazioni di
+validation si stabilizzano con oscillazioni moderate. Il miglior Dice di
+validation con soglia $0{,}5$ è $0{,}6415$, ottenuto all'epoca 20.
+
+La soglia per convertire la mappa di probabilità in maschera binaria è stata
+scelta esclusivamente sulla validation. Tra i valori compresi tra $0{,}10$ e
+$0{,}90$, la soglia $0{,}15$ ottiene il Dice più alto ($0{,}6462$), indicando
+che una soglia più bassa recupera meglio i filamenti sottili.
+
+\begin{table}[ht]
+    \centering
+    \caption{Risultati dell'Esperimento 1.}
+    \label{tab:experiment-1-results}
+    \begin{tabular}{lr}
+        \toprule
+        Metrica & Valore \\
+        \midrule
+        Miglior Dice validation con $t=0{,}5$ & 0,6415 \\
+        Soglia selezionata sulla validation & 0,15 \\
+        Dice validation con soglia selezionata & 0,6462 \\
+        Loss sul test interno & 0,2014 \\
+        Dice sul test interno & 0,6157 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Il Dice sul test interno conferma che la baseline individua una parte
+significativa dei filamenti su osservazioni non utilizzate durante lo
+sviluppo. I risultati costituiscono il riferimento per l'Esperimento 2,
+nel quale verrà utilizzato SGD con momentum.
+
+\subsection{Esperimento 2 -- U-Net con SGD, momentum ed early stopping}
+\label{sec:experiment-2}
+
+Il secondo esperimento confronta SGD con momentum con l'AdamW della baseline.
+Varia soltanto l'ottimizzatore: learning rate $10^{-2}$, momentum classico
+$0{,}9$ e weight decay $10^{-4}$.
+
+È stato inoltre introdotto un early stopping basato sul Dice di validation,
+la metrica più rappresentativa per una segmentazione binaria sbilanciata. Il
+training viene interrotto dopo otto epoche senza un miglioramento di almeno
+$0{,}001$ nel Dice di validation. L'addestramento si è fermato all'epoca 18;
+il miglior modello è quello dell'epoca 10.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../experiments/02/plots/training_curves.png}
+    \caption{Loss e Dice dell'Esperimento 2 con SGD, momentum ed early
+    stopping.}
+    \label{fig:experiment-2-training}
+\end{figure}
+
+I risultati di validation sono confrontati nella
+Tabella~\ref{tab:optimizer-comparison}. SGD ottiene un Dice leggermente
+superiore alla soglia standard $0{,}5$, ma, dopo la selezione della soglia,
+le due configurazioni raggiungono lo stesso Dice di validation. La soglia
+ottimale per SGD è $0{,}70$, mentre per AdamW era $0{,}15$: gli optimizer
+producono quindi probabilità calibrate in modo diverso, senza un vantaggio
+netto in termini di sovrapposizione finale.
+
+\begin{table}[ht]
+    \centering
+    \caption{Confronto tra AdamW e SGD sul validation set.}
+    \label{tab:optimizer-comparison}
+    \begin{tabular}{lrr}
+        \toprule
+        Metrica & AdamW & SGD \\
+        \midrule
+        Miglior Dice con $t=0{,}5$ & 0,6415 & 0,6457 \\
+        Epoca migliore & 20 & 10 \\
+        Epoche completate & 20 & 18 \\
+        Soglia ottimale & 0,15 & 0,70 \\
+        Dice con soglia ottimale & 0,6462 & 0,6462 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Il test interno non è stato eseguito per l'Esperimento 2. La scelta tra le
+configurazioni viene effettuata sulla validation, lasciando il test per la
+valutazione finale del modello selezionato.
+
+\subsection{Esperimento 3 -- U-Net con encoder ResNet18 pre-addestrato}
+\label{sec:experiment-3}
+
+Negli esperimenti precedenti il collo di bottiglia è la quantità di dati: con
+806 record di training, l'encoder della U-Net deve imparare da zero sia le
+feature visive di basso livello sia quelle specifiche dei filamenti. L'ipotesi
+di questo esperimento è che le feature apprese su ImageNet -- bordi, texture e
+strutture locali -- costituiscano un punto di partenza migliore anche per le
+immagini solari, pur appartenendo a un dominio visivo molto diverso.
+
+L'encoder della baseline è stato quindi sostituito con una \textbf{ResNet18
+pre-addestrata su ImageNet} (\textit{transfer learning} con \textit{fine-tuning}
+completo): i quattro stadi residuali della rete producono feature map a 64,
+128, 256 e 512 canali, collegate tramite skip connections al decoder, che
+resta quello della baseline. Le immagini H-alpha sono in scala di grigi,
+mentre ResNet18 attende un ingresso RGB: il canale è stato replicato tre
+volte, senza modificare i pesi del primo strato convoluzionale. Il modello
+risultante ha $14\,343\,425$ parametri addestrabili e occupa meno di
+$0{,}5$~GB di memoria GPU durante il training, ampiamente sotto la soglia dei
+5~GB indicata come bonus.
+
+Rispetto alla baseline cambiano due sole scelte, rese necessarie dal
+fine-tuning: il learning rate è ridotto a $10^{-4}$ (AdamW), per non
+distruggere nelle prime epoche le feature pre-addestrate, e i canali di
+ingresso diventano tre. Split, augmentation, loss, batch size, risoluzione e
+protocollo di early stopping sono invariati.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../experiments/03/plots/training_curves.png}
+    \caption{Andamento di loss e Dice nell'Esperimento 3 (encoder ResNet18
+    pre-addestrato).}
+    \label{fig:experiment-3-training}
+\end{figure}
+
+Come mostrato nella Figura~\ref{fig:experiment-3-training}, il fine-tuning
+converge molto più rapidamente delle configurazioni addestrate da zero: il
+miglior Dice di validation con soglia $0{,}5$ è $0{,}6552$, raggiunto già
+all'epoca 8, e l'early stopping interrompe il training all'epoca 16. Il
+guadagno rispetto alla migliore configurazione da zero è di circa un punto
+Dice ($0{,}6552$ contro $0{,}6457$), con meno della metà delle epoche
+effettive e curve di training e validation ravvicinate, senza segni di
+overfitting.
+
+L'effetto più rilevante riguarda però la \textbf{calibrazione delle
+probabilità}. La curva soglia--Dice è quasi piatta: il Dice di validation
+resta compreso tra $0{,}649$ e $0{,}655$ per tutte le soglie tra $0{,}10$ e
+$0{,}90$, con massimo $0{,}6554$ a $t=0{,}45$. Negli esperimenti 1 e 2 la
+soglia ottimale si trovava agli estremi dell'intervallo ($0{,}15$ e $0{,}70$)
+e la sua scelta era quindi critica; con l'encoder pre-addestrato la soglia
+standard $0{,}5$ è già quasi ottimale. Questo comportamento è particolarmente
+desiderabile in prospettiva della submission Kaggle, dove la soglia deve
+essere fissata a priori senza accesso alla ground truth. I risultati numerici
+di tutti gli esperimenti sono raccolti e confrontati nella
+Tabella~\ref{tab:architecture-comparison}.
+
+Dal controllo qualitativo sulla validation (predizioni salvate in
+\texttt{experiments/03/plots}) emergono ancora due comportamenti tipici:
+falsi positivi di piccole dimensioni in prossimità del bordo del disco e
+mancato riconoscimento dei filamenti più deboli e sottili. Entrambi i
+problemi sono coerenti con la perdita di dettaglio introdotta dal
+ridimensionamento a $512 \times 512$ e motivano le modifiche proposte di
+seguito.
+
+\subsection{Esperimento 4 -- Training su patch ad alta risoluzione}
+\label{sec:experiment-4}
+
+Il controllo qualitativo dell'Esperimento 3 ha evidenziato errori
+concentrati sui filamenti più sottili e deboli. L'ipotesi è che il collo di
+bottiglia non sia più la capacità del modello, ma la \textbf{perdita di
+dettaglio introdotta dal ridimensionamento}: un fattore di scala $4\times$
+(da $2048 \times 2048$ a $512 \times 512$) riduce un filamento di 6 pixel a
+meno di 2 pixel e cancella quelli più sottili sia nell'immagine sia, per
+effetto del resize nearest-neighbor, nella ground truth stessa.
+
+In questo esperimento il training avviene su \textbf{crop casuali
+$512 \times 512$ estratti dalla risoluzione nativa}, senza alcun
+ridimensionamento: le strutture sottili conservano la loro larghezza
+originale sia in ingresso sia nella maschera. Poiché i filamenti occupano
+una frazione molto piccola dell'immagine, un crop completamente casuale
+conterrebbe spesso solo sfondo; il campionamento è quindi bilanciato:
+nell'80\% dei casi il crop contiene almeno un pixel di filamento (massimo 10
+tentativi), nel restante 20\% è casuale puro e include sfondo, bordo del
+disco e rumore, preservando esempi negativi. Modello, ottimizzatore, loss,
+augmentation e split sono identici all'Esperimento 3: l'unica variabile
+modificata è la risoluzione effettiva dell'ingresso.
+
+Anche validation e test devono operare alla risoluzione nativa: valutare il
+modello su immagini ridimensionate lo esporrebbe a un ingresso fuori
+distribuzione. Ogni immagine è divisa in una griglia $4 \times 4$ di
+tasselli da $512 \times 512$, le probabilità predette sono ricomposte in una
+mappa $2048 \times 2048$ e poi ridotte a $512 \times 512$: il Dice calcolato
+su queste mappe ridotte usa la stessa ground truth degli esperimenti
+precedenti, mantenendo la \textbf{confrontabilità diretta}; il Dice alla
+risoluzione nativa è riportato come informazione aggiuntiva. La selezione
+della soglia e l'early stopping usano il Dice a $512 \times 512$. Il costo
+di memoria resta invariato, perché la dimensione dell'ingresso della rete
+non cambia; aumenta solo il tempo di valutazione (16 forward per immagine).
+
+Si noti infine una differenza metodologica: in ogni epoca ciascuna immagine
+di training contribuisce con un solo crop casuale, quindi la copertura del
+dataset per epoca è inferiore, ma la diversità dei campioni è maggiore e
+agisce come ulteriore forma di augmentation.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../experiments/04/plots/training_curves.png}
+    \caption{Andamento di loss e Dice nell'Esperimento 4 (training su crop
+    alla risoluzione nativa).}
+    \label{fig:experiment-4-training}
+\end{figure}
+
+L'ipotesi \textbf{non è confermata}: con un Dice di validation di
+$0{,}6093$ a soglia $0{,}5$, il modello addestrato su crop nativi risulta
+inferiore di circa quattro punti e mezzo a quello addestrato su immagini
+ridimensionate ($0{,}6552$). Il divario resta invariato dopo la selezione
+della soglia ($0{,}6127$ con $t=0{,}20$) e il Dice calcolato alla risoluzione
+nativa ($0{,}6130$) non mostra alcun beneficio dalla maggiore risoluzione
+effettiva. Il confronto qualitativo sulla validation conferma: gli errori
+sui filamenti sottili osservati nell'Esperimento 3 non sono stati recuperati.
+
+L'analisi delle curve nella Figura~\ref{fig:experiment-4-training} indica
+però che il fattore limitante non è la capacità del modello, ma la
+\textbf{copertura del dataset}: con un solo crop casuale per immagine, a
+ogni epoca il modello osserva circa un sedicesimo dei pixel di ciascuna
+osservazione e, a parità di numero di epoche, il volume di dati
+effettivamente visto è una frazione di quello degli esperimenti precedenti.
+Tre evidenze supportano questa lettura: il Dice migliore si ottiene
+all'\textbf{ultima} epoca, l'early stopping non interviene mai, e sia la
+loss di validation sia il Dice di training stanno ancora migliorando al
+termine del training. Il modello è quindi sotto-allenato, non incapace di
+sfruttare la risoluzione nativa.
+
+Un secondo effetto riguarda la calibrazione: il campionamento bilanciato dei
+crop (80\% contenenti filamento) sovrarappresenta i pixel positivi rispetto
+all'immagine intera e la soglia ottimale scende a $0{,}20$; la curva
+soglia--Dice resta comunque ampia e piatta ($0{,}60$--$0{,}61$ su tutto
+l'intervallo), quindi la scelta della soglia non è critica.
+
+\begin{table}[ht]
+    \centering
+    \caption{Confronto tra le configurazioni sul validation set.}
+    \label{tab:architecture-comparison}
+    \begin{tabular}{lrrrrr}
+        \toprule
+        Metrica & Exp.\ 1 & Exp.\ 2 & Exp.\ 3 & Exp.\ 4 & Exp.\ 5 \\
+        \midrule
+        Miglior Dice con $t=0{,}5$ & 0,6415 & 0,6457 & \textbf{0,6552} & 0,6093 & 0,5921 \\
+        Epoca migliore & 20 & 10 & 8 & 20 & 10 \\
+        Epoche completate & 20 & 18 & 16 & 20 & 10 \\
+        Soglia ottimale & 0,15 & 0,70 & 0,45 & 0,20 & 0,35 \\
+        Dice con soglia ottimale & 0,6462 & 0,6462 & \textbf{0,6554} & 0,6127 & 0,5938 \\
+        Dice nativo con soglia ottimale & -- & -- & -- & 0,6130 & 0,5965 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Per completezza, su questo esperimento è stata eseguita anche la valutazione
+sul test interno: Dice $0{,}6022$ con $t=0{,}20$ ($0{,}6039$ alla risoluzione
+nativa), coerente con la validation. La selezione del modello finale resta
+basata esclusivamente sulla validation; le misure di test sono riportate a
+solo scopo di analisi.
+
+\subsection{Esperimento 5 -- Fine-tuning a due stadi su crop nativi}
+\label{sec:experiment-5}
+
+L'Esperimento 4 ha mostrato che il training su crop nativi soffre la scarsa
+copertura del dataset: a parità di epoche il modello osserva una frazione
+dei pixel e non converge. La contromisura testata qui separa i due obiettivi
+di apprendimento: il \textbf{contesto globale} si apprende sulle immagini
+ridimensionate (intera osservazione per campione), il \textbf{dettaglio
+spaziale} sui crop nativi. Si parte quindi dai pesi dell'Esperimento 3 -- il
+migliore sulla validation -- e il training prosegue per un massimo di dieci
+epoche sui crop $512 \times 512$ nativi, con learning rate ridotto a
+$10^{-5}$, un ordine di grandezza sotto quello del training originale, per
+adattare i pesi al nuovo dominio di ingresso senza distruggere quanto già
+appreso; l'early stopping opera con pazienza 4. Campionamento dei crop,
+augmentation, loss, split e protocollo di valutazione a tasselli sono
+identici all'Esperimento 4: l'unica variabile modificata è
+l'inizializzazione.
+
+In questa configurazione è stata anche ottimizzata l'efficienza del
+training: la decodifica delle immagini ad alta risoluzione e la
+rasterizzazione dei poligoni dominano il tempo di epoca, quindi immagini e
+maschere sono conservate in memoria dopo il primo caricamento; dalla seconda
+epoca il throughput è limitato soltanto dalla GPU.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../experiments/05/plots/training_curves.png}
+    \caption{Andamento di loss e Dice nell'Esperimento 5 (fine-tuning a due
+    stadi su crop nativi).}
+    \label{fig:experiment-5-training}
+\end{figure}
+
+Il fine-tuning a due stadi adatta progressivamente il modello al dominio dei
+crop nativi -- il Dice di validation sale da $0{,}458$ a $0{,}5921$ in dieci
+epoche -- ma non raggiunge né l'Esperimento 4 ($0{,}6093$) né, soprattutto,
+l'Esperimento 3 ($0{,}6552$), come riassunto nella
+Tabella~\ref{tab:architecture-comparison}. Due osservazioni emergono
+dall'analisi delle curve nella Figura~\ref{fig:experiment-5-training}.
+
+In primo luogo, anche in questo esperimento il miglior Dice si ottiene
+all'\textbf{ultima} epoca e l'early stopping non interviene: la curva di
+validation è ancora in crescita al termine del training. \textbf{Tutti} i
+training su crop (Esperimenti 4 e 5) sono terminati mentre il modello stava
+ancora migliorando, confermando che la copertura ridotta del dataset
+richiede budget di training molto superiori a quelli sufficienti per le
+immagini ridimensionate. In secondo luogo, il learning rate $10^{-5}$ si è
+probabilmente rivelato eccessivamente prudente per il riadattamento al nuovo
+dominio di ingresso: dieci epoche a questo passo non bastano a colmare il
+divario.
+
+Va infine osservato che i pesi dell'Esperimento 3, sottoposti a inferenza a
+tasselli sulla risoluzione nativa, partono da un Dice inferiore a $0{,}46$:
+il modello addestrato su immagini ridimensionate non è in grado di operare
+direttamente alla risoluzione originale. Se la submission Kaggle è valutata
+a piena risoluzione, il confronto rilevante diventa il Dice nativo, sul
+quale gli Esperimenti 4 ($0{,}6130$) e 5 ($0{,}5965$) sono i candidati
+migliori nonostante il divario sulla metrica a $512 \times 512$. La verifica
+della risoluzione attesa dalla competizione è dunque un passaggio obbligato
+prima della selezione del modello finale.
+
+\subsection{Analisi degli errori}
+\label{sec:error-analysis}
+
+Il controllo qualitativo sulle predizioni mostra due difetti ricorrenti:
+i filamenti predetti appaiono in parte più spessi della ground truth e sono
+presenti piccoli falsi positivi, soprattutto vicino al bordo del disco.
+Per quantificare questi difetti abbiamo analizzato le predizioni del modello
+dell'Esperimento 3 sulla validation alla soglia selezionata ($t=0{,}45$).
+Precision e recall medie risultano quasi uguali ($0{,}669$ e $0{,}680$) e il
+rapporto tra area predetta e area annotata ha mediana $0{,}997$: non esiste
+quindi un bias sistematico di ispessimento, e l'effetto osservato
+visivamente dipende dall'alone di probabilità attorno ai contorni. I falsi
+positivi sono invece componenti connesse molto piccole: mediana di 7 pixel,
+con il 90\% dei casi sotto i 64 pixel.
+
+Abbiamo quindi verificato se un semplice post-processing potesse migliorare
+il Dice di validation. La rimozione delle componenti connesse sotto i 16
+pixel non cambia il risultato ($0{,}6559$ contro $0{,}6554$), mentre soglie
+più aggressive o l'erosione morfologica peggiorano nettamente la metrica
+(fino a $0{,}51$): anche la ground truth contiene infatti molti filamenti di
+pochi pixel a $512 \times 512$, e filtri di questo tipo eliminano più veri
+positivi che falsi positivi. Il post-processing morfologico è stato quindi
+scartato.
+
+Per capire dove si concentrano gli errori residui abbiamo infine misurato
+l'accordo tra gli annotatori del dataset. 296 file possiedono due o tre
+annotazioni indipendenti: sulle 598 coppie, il Dice medio tra due
+annotazioni della stessa immagine è $0{,}62$ (mediana $0{,}65$, 10°--90°
+percentile $0{,}43$--$0{,}77$). I filamenti coprono in media lo $0{,}38\%$
+dei pixel e le strutture più deboli sono annotate in modo diverso da
+annotatori diversi; gli errori residui del modello si concentrano proprio
+su queste strutture ambigue e sui contorni. Questo suggerisce che il margine
+di miglioramento ulteriore sul dataset è limitato, e che la selezione del
+modello finale non deve inseguire variazioni di Dice dell'ordine di pochi
+millesimi.
+
+\subsection{Modifiche proposte}
+
+Le misure della Sezione~\ref{sec:error-analysis} guidano le scelte finali.
+Poiché le immagini di training e di test hanno risoluzione
+$2048 \times 2048$, assumiamo che le maschere di submission debbano essere
+prodotte alla stessa risoluzione: il confronto rilevante è quindi il Dice
+nativo e il candidato finale è la pipeline a crop. Resta da eseguire un
+ultimo training con budget adeguato, proseguendo dal checkpoint
+dell'Esperimento 4 per 30--40 epoche con learning rate $10^{-4}$: la cache
+introdotta nell'Esperimento 5 rende il costo sostenibile e tutte le curve
+degli esperimenti su crop terminano ancora in crescita. Per la submission,
+prodotta con inferenza a tasselli, si applicherà la \textbf{test-time
+augmentation} (media delle probabilità su versioni ruotate e riflesse della
+stessa immagine) e, se i tempi lo consentono, un \textbf{ensemble} di
+modelli addestrati con seed diversi. Il post-processing morfologico è stato
+testato e scartato, come riportato nella Sezione~\ref{sec:error-analysis}.

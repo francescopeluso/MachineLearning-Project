@@ -1,0 +1,89 @@
+\section{Introduzione}
+\label{sec:introduction}
+
+L'obiettivo di questo progetto è identificare i filamenti solari nelle immagini del Sole mediante tecniche di Machine Learning. Il problema è formulato come un'attività di \textbf{segmentazione semantica binaria}: data un'immagine solare, il modello deve produrre una maschera binaria in cui ogni pixel viene classificato come \textit{filamento} oppure \textit{sfondo}.
+
+L'analisi delle immagini di addestramento evidenzia alcune difficoltà rilevanti. I filamenti solari si presentano generalmente come strutture scure, sottili e irregolari sul disco solare. Il loro contrasto rispetto alle regioni circostanti può essere basso, mentre forma e dimensioni possono variare considerevolmente tra immagini diverse. Inoltre, la superficie solare contiene altre strutture e rumore di fondo che possono avere caratteristiche visive simili a quelle di un filamento.
+
+Un altro aspetto importante è il forte sbilanciamento tra le due classi. In genere, i filamenti occupano solo una piccola porzione dell'immagine completa, mentre la maggior parte dei pixel appartiene allo sfondo. Per questo motivo, identificare correttamente le regioni dei filamenti è più importante che massimizzare semplicemente l'accuratezza della classificazione a livello di pixel.
+
+Il progetto si concentra quindi su modelli capaci di combinare l'estrazione di caratteristiche di alto livello con la conservazione delle informazioni spaziali fini. La qualità della segmentazione ottenuta viene valutata principalmente mediante il \textbf{coefficiente di Dice}, che misura la sovrapposizione tra la maschera binaria predetta e la corrispondente maschera di riferimento (\textit{ground truth}).
+
+\section{Approccio proposto}
+\label{sec:approach}
+
+\subsection{Architettura della rete}
+
+L'approccio principale considerato per questo progetto si basa su una
+\textbf{rete neurale convoluzionale U-Net}, un'architettura progettata
+specificamente per la segmentazione delle immagini.
+
+Le architetture CNN studiate per la classificazione delle immagini non
+sono direttamente adatte al nostro problema. Una rete di classificazione
+estrae progressivamente le caratteristiche da un'immagine e produce infine
+una predizione per l'intero ingresso, come un'etichetta di classe. Nella
+segmentazione semantica, invece, è importante anche la posizione delle
+caratteristiche rilevate, poiché la rete deve assegnare una classe a ogni
+pixel dell'immagine.
+
+U-Net affronta questo problema mediante due percorsi principali. Il primo
+estrae progressivamente caratteristiche di livello più elevato e ne riduce
+la risoluzione spaziale, in modo analogo a una CNN standard. Il secondo
+aumenta progressivamente la risoluzione di tali caratteristiche fino a
+ottenere una maschera di segmentazione.
+
+Una caratteristica importante di U-Net è l'impiego di \textbf{connessioni
+di salto} (\textit{skip connections}) tra diverse parti della rete. Queste
+connessioni consentono di riutilizzare, durante la costruzione della
+maschera di uscita, le caratteristiche che contengono informazioni spaziali
+fini. Ciò è particolarmente utile nel nostro problema, poiché i filamenti
+solari possono essere sottili, irregolari e difficili da distinguere dalla
+superficie solare circostante.
+
+\subsection{Vantaggi e limitazioni}
+
+I principali vantaggi di questo approccio sono:
+
+\begin{itemize}
+    \item U-Net è progettata specificamente per la segmentazione delle
+          immagini a livello di pixel;
+    \item si basa principalmente su operazioni convoluzionali, già adatte
+          all'estrazione di caratteristiche spaziali dalle immagini;
+    \item le connessioni di salto aiutano a conservare le informazioni
+          relative alle strutture piccole e sottili;
+    \item l'architettura è relativamente semplice e può essere modificata
+          per valutare sperimentalmente configurazioni diverse.
+\end{itemize}
+
+È necessario considerare anche alcune limitazioni:
+
+\begin{itemize}
+    \item la riduzione della risoluzione spaziale può causare la perdita di
+          informazioni relative ai filamenti molto sottili;
+    \item l'elaborazione di immagini ad alta risoluzione richiede una
+          maggiore quantità di memoria della GPU;
+    \item il forte sbilanciamento tra i pixel appartenenti ai filamenti e
+          quelli appartenenti allo sfondo può rendere più difficile
+          l'addestramento;
+    \item strutture dall'aspetto simile ai filamenti possono generare
+          predizioni false positive.
+\end{itemize}
+
+\subsection{Approcci alternativi}
+
+Come alternativa, si potrebbe considerare una \textbf{U-Net residua}
+(\textit{Residual U-Net}), introducendo blocchi residui e connessioni di
+salto all'interno della rete. Ciò consentirebbe di analizzare, nel contesto
+della segmentazione delle immagini, le tecniche di apprendimento residuo
+studiate durante il corso.
+
+Un'altra possibilità consiste nell'utilizzare una \textbf{CNN preaddestrata}
+come parte dell'architettura U-Net e applicare il \textit{transfer learning}
+e il \textit{fine-tuning}. Questo approccio potrebbe essere utile soprattutto
+se l'insieme di addestramento disponibile non fosse sufficientemente ampio
+da consentire l'apprendimento da zero di caratteristiche visive robuste.
+
+Si potrebbero considerare anche architetture di segmentazione più avanzate.
+Tuttavia, U-Net rappresenta un punto di partenza adeguato grazie alla sua
+architettura relativamente semplice e all'impiego diretto di strati
+convoluzionali e connessioni di salto.

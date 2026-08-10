@@ -1,0 +1,35 @@
+{
+  "experiment_id": "01",
+  "model": "UNet from scratch",
+  "in_channels": 1,
+  "base_channels": 16,
+  "trainable_parameters": 1942289,
+  "image_size": [
+    512,
+    512
+  ],
+  "batch_size": 2,
+  "epochs": 20,
+  "optimizer": "AdamW",
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "loss": "0.5 * BCEWithLogitsLoss + 0.5 * DiceLoss",
+  "seed": 22,
+  "split_fractions": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "unique_files_per_split": {
+    "train": 494,
+    "validation": 106,
+    "test": 107
+  },
+  "coco_records_per_split": {
+    "train": 806,
+    "validation": 169,
+    "test": 179
+  },
+  "device": "mps",
+  "pytorch_version": "2.12.0"
+}

@@ -1,0 +1,6 @@
+{
+  "loss": 0.2014,
+  "dice": 0.6157,
+  "threshold": 0.15,
+  "samples": 179
+}
