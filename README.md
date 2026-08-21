@@ -18,6 +18,10 @@ post-processing are searched jointly on validation, at native resolution, agains
 the competition's own metric. The full report is in `docs/`, the experiment ledger
 in `experiments/README.md`.
 
+The project brief sets a GPU memory budget: at most 5 GB of VRAM in training and
+4 GB at inference. Both notebooks measure the actual peak at runtime and report it
+in the experiment metrics.
+
 ## Running it
 
 ```bash
