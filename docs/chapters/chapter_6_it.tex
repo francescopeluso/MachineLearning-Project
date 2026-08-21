@@ -1,0 +1,46 @@
+\section{Risultati, conclusioni e prossimi passi}
+\label{sec:next}
+
+Il modello consegnato è l'Esperimento~8 -- ResNet18-U-Net a $1536^2$, test-time
+augmentation D4 -- con l'operating point ri-selezionato sulla PQ pura: Dice di
+validazione $0{,}668$, PQ $\mathbf{0{,}4264}$ ($t=0{,}48$, chiusura 1, dimensione
+minima 384, gate di confidenza $0{,}97$). La submission è pienamente riproducibile: il
+notebook di training rideriva esattamente questa ricetta dal checkpoint congelato, e il
+notebook di inferenza rigenera una \texttt{submission.csv} identica byte per byte.
+
+Tre lezioni valgono oltre questo dataset. \textbf{Misurare ciò che il punteggio misura,
+dove lo misura}: selezionare l'operating point a risoluzione nativa, contro la
+definizione di PQ degli organizzatori e sull'obiettivo che la leaderboard riporta
+davvero è valso $+0{,}020$ Dice e $+0{,}031$ PQ complessivi -- tutto gratis, senza
+riaddestrare. \textbf{Scegliere la metrica che vede il modo di fallire}: il Dice ha
+superato il tetto inter-annotatore all'Esperimento~2 ed è rimasto piatto; ogni
+miglioramento reale successivo era visibile solo nel termine di riconoscimento della
+PQ. Una valutazione limitata alla metrica del corso avrebbe dichiarato il progetto
+concluso dieci esperimenti prima. \textbf{Un'ipotesi falsificata non è un run
+sprecato}: dieci idee sono state misurate e respinte in questo studio, e ogni rigetto
+ha ridiretto lo sforzo -- il fallimento dell'Esperimento~3 ha esposto il problema della
+risoluzione, e il fallimento di ogni meccanismo post-hoc sull'estensione
+(Sezione~\ref{sec:falsified}) è precisamente ciò che dimostra che l'errore residuo va
+attaccato in addestramento.
+
+Uno dei seguiti preparati è già stato eseguito e falsificato: addestrare su finestre
+casuali $1536^2$ del frame nativo $2048^2$ (Esperimento~13) ha perso $0{,}020$ PQ e
+spinto il recall sotto i 500~pixel giù a $0{,}31$ -- l'addestramento a finestre
+rinuncia al contesto dell'intero disco senza comprare i filamenti piccoli, e chiude la
+strada della risoluzione ($+0{,}136$, $+0{,}009$, $-0{,}020$ nei tre salti di scala).
+La loss bilanciata per istanza (Esperimento~14) è stata poi falsificata come termine
+\emph{dominante}: con la Dice globale ridimensionata, il controllo dei falsi positivi
+è collassato e il recall delle istanze piccole è sceso a $0{,}09$ -- ma quello delle
+istanze da 2000--5000 pixel è salito a $0{,}76$, quindi il termine merita un retest a
+peso ridotto, stesso arco degli Esperimenti~3 e~9. Il peso sulla classe positiva (Esperimento~15) ha
+poi prodotto il fallimento più istruttivo della campagna: la sotto-segmentazione è
+sparita (rapporto d'area dei near miss da $0{,}62$ a $0{,}95$), i pure miss sono
+calati di un quinto e il Dice ha segnato il record del progetto ($0{,}677$) -- ma le
+predizioni più grasse hanno gonfiato in parallelo i falsi positivi, chiudendo
+$0{,}007$ sotto il campione. A chiudere la campagna è un fatto statistico: su 169 voci
+di validazione, ogni guadagno sotto $\approx +0{,}005$ è indistinguibile dal rumore di
+selezione. Il passo preparato che attacca esattamente questo è la
+\emph{cross-validation a cinque fold}: ogni osservazione addestra un modello, e le
+predizioni out-of-fold sostengono una ricerca dell'operating point su $6{,}7\times$
+più voci di annotazione -- trasformando i guadagni che questa campagna poteva solo
+sospettare in guadagni che si possono misurare.

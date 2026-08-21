@@ -1,0 +1,146 @@
+\section{Second campaign: instances}
+\label{sec:second-campaign}
+
+The first campaign ended with a diagnosis -- what limits the score is instance
+recognition -- and the second attacked it, keeping the same discipline: one hypothesis
+per run, falsified results reported with the same care as confirmed ones. From
+Experiment~7 on, the internal test split is folded into training ($+22\%$ data),
+legitimate exactly because it is never used to choose anything.
+
+\begin{table}[ht]
+    \centering
+    \caption{Second campaign, each run at its own operating point, scored with the
+    official metric at $2048^2$ (not comparable with Table~\ref{tab:experiments},
+    which is at fixed threshold without post-processing).}
+    \label{tab:experiments-2}
+    \small\begin{tabular}{clrrl}
+        \toprule
+        Exp. & What changes & Dice & PQ & Verdict \\
+        \midrule
+        7  & test split folded in, still $1024$        & 0.6544 & 0.3775 & superseded by 8 \\
+        8  & $1024 \to 1536$, D4 TTA, confidence gate   & \textbf{0.6729} & \textbf{0.4194} & \textbf{final model} \\
+        9  & + clDice term at $1536$, warm start        & 0.6686 & 0.4064 & falsified \\
+        10 & $\pm 25\%$ scale jitter                    & 0.6670 & 0.4003 & falsified \\
+        11 & detect-then-refine cascade                 & 0.6560 & 0.3947 & falsified \\
+        12 & soft consensus targets                     & 0.6687 & 0.3863 & falsified \\
+        13 & native $2048$, random $1536$ windows       & 0.6692 & 0.4066 & falsified \\
+        14 & instance-balanced Dice, weight 0.35        & 0.6572 & 0.3611 & falsified \\
+        15 & BCE positive-class weight 20               & \textbf{0.6769} & 0.4198 & falsified by 0.007 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{The ceiling is annotator disagreement, and it binds SQ}
+
+Factorised, the shipped point's $\mathrm{PQ} = 0.4264$ is $\mathrm{SQ} = 0.668 \times
+\mathrm{RQ} = 0.638$ over 1144 ground-truth instances (TP~712, FP~376, FN~432). Across
+every capacity, resolution and architecture tried in thirteen experiments, SQ moved
+inside $0.66$--$0.68$ and no further -- against a matched-pair agreement between human
+annotators of $0.59$. The conclusion is uncomfortable but useful: \textbf{SQ is a
+property of the annotation process, not of the model}. Every point of PQ still on the
+table goes through RQ: finding more of the filaments annotators marked, predicting
+fewer they did not.
+
+\subsection{Where the error actually is}
+
+At the shipped operating point, the 432 false negatives split into 244 \emph{pure
+misses} (not one predicted pixel on the instance), 159 \emph{near misses} (a blob is
+there but stays at IoU $\le 0.5$, median predicted/true area $0.62$ -- the model
+systematically under-segments) and 29 \emph{splits}; the 376 false positives into 128
+\emph{hallucinations}, 239 on annotated but unmatched filaments, and 9 \emph{merges}.
+Instance recall falls sharply with size, from $0.34$ below 500~pixels to $0.75$ above
+5000 (Figure~\ref{fig:predictions}); at the recall-leaning balanced point the smallest
+bucket rises to $0.475$ at the cost of 62 extra false positives, and that is where the
+diagnosis behind the next campaign was read. Two families dominate -- small-instance
+recall and under-segmentation; split/merge errors are under $4\%$ of the total, which
+is why no split/merge machinery was ever built.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.78\linewidth]{../experiments/08/plots/validation_predictions.png}
+    \caption{Final model on three validation observations: annotator ground truth,
+    predicted probability map, and instances at the shipped operating point. The
+    errors are concentrated in small, faint filaments.}
+    \label{fig:predictions}
+\end{figure}
+
+Two caveats qualify these counts, and both were checked. First, the organisers have
+confirmed in the competition forum that the annotations are \emph{incomplete} --
+visible filaments may be missing -- so part of the 128 hallucinations are plausibly
+real filaments no annotator marked; measured on the multi-annotator files, even blobs
+whose probability peaks above $0.85$ are marked by only $63\%$ of annotators on
+average, which is why the confidence gate, not a recall push, sits at the PQ optimum.
+Second, the judging committee reads the \emph{many-to-one / one-to-many} distribution
+alongside the score (Figure~\ref{fig:distributions}): here the matching structure is
+nearly one-to-one -- of 1144 annotated instances, 900 are touched by at least one
+prediction and only 67 by more than one; of 1088 predictions, 960 touch an annotated
+filament and only 20 touch more than one.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.98\linewidth]{../experiments/08/plots/official_distributions.png}
+    \caption{The distributions the organisers' self-evaluation notebook reports, for
+    the shipped model on validation: IoU and Dice over every overlapping
+    ground-truth/prediction pair, and the many-to-one / one-to-many relations
+    (a hit is any overlap; the metric's IoU $> 0.5$ gate is stricter).}
+    \label{fig:distributions}
+\end{figure}
+
+\subsection{Mechanisms measured and rejected}
+\label{sec:falsified}
+
+Several plausible mechanisms were evaluated and discarded -- most of them cheaply, on
+the \emph{frozen} probability maps of the final model, reproduced bit-exactly on a
+second machine so that any instantiation idea could be measured in minutes without a
+training run.
+
+\textbf{Topology and cascade machinery.} clDice at $1536$, where the soft skeleton is
+finally meaningful, still loses $0.013$ PQ (Exp.~9); a detect-then-refine cascade loses
+$0.025$ (Exp.~11). Both attack fragmentation, which the error analysis had already
+shown to be marginal. \textbf{Soft consensus targets} (Exp.~12) turn annotator
+disagreement into the label; calibration barely moves and PQ drops $0.033$.
+\textbf{Scale jitter} (Exp.~10) costs $0.019$. \textbf{Per-component local thresholds}
+($\tau_c = \alpha \cdot \mathrm{peak}_c$, or a quantile of the component's own
+probability mass) should fix under-segmentation without over-fattening correct
+components; measured, they lose to the plain global threshold, because every surviving
+component peaks near $1.0$ and the local cut collapses into a global one.
+\textbf{Per-component dilation} (nearest-component distance transform, so merges are
+impossible) loses at every radius -- $\delta = 1$~px already costs $0.03$ PQ -- because
+near misses are not eroded copies of the truth but differently shaped, typically
+missing a faint tail. \textbf{Ensembling probability maps} loses twice: with the weaker siblings
+(Exps.~9, 10, 12), whose miscalibration dilutes the marginal detections, and even with
+the near-equal, oppositely-biased Exp.~15 -- a $+0.003$ aggregate gain that scores
+\emph{below} the single model under cross-selection. The emerging rule: on 169
+validation entries, any gain below $\approx +0.005$ cannot be told from selection
+noise. And \textbf{Mask~R-CNN} was rejected on paper:
+it rebuilds each mask from a $28 \times 28$ grid inside an axis-aligned box, an
+upsampling of $\sim\!25\times$ per axis for structures whose defining property is being
+a few pixels wide and hundreds long.
+
+\textbf{Post-hoc merging of split filaments} was bounded and then falsified. An oracle
+that merges, with ground-truth knowledge, exactly the prediction pieces that would flip
+a split into a match gains $+0.017$ PQ -- but only 18 of its 29 merge groups flip
+cleanly, because the annotators disagree on connectivity itself. No blind mechanism
+captures that ceiling: relabelling two instances as one when they are connected at a
+low probability threshold (no pixel added, so Dice is untouched) gains $+0.004$ in
+aggregate, yet under cross-selection the two validation halves pick opposite ends of
+the parameter grid and the transferred gain is $-0.006$ -- selection noise, not signal;
+merging by spatial proximity loses at every useful radius. Low-probability bridges
+cannot tell one broken filament from two nearby ones.
+
+The extent and merge mechanisms failing identically is the finding of the campaign:
+the under-segmentation and the fragmentation both live in the model's probability
+support, not in the thresholding. No post-processing can claim them; only training
+changes can.
+
+\subsection{Validation versus leaderboard}
+\label{sec:gap}
+
+The public score is systematically below validation, and the gap decomposes into
+measured parts: an early submission was produced by a non-final recipe (worth
+$\sim$0.02); ordinary generalisation to a different annotator draw ($\sim$0.026,
+measured once on the internal test split); and composition ($\le 0.01$ -- PQ
+stratified by annotator multiplicity, GONG station and year varies within counting
+noise, and the test set's station/year mix matches validation). The submission path
+itself was audited clean: disjoint components by construction, RLE conventions matching
+the organisers' scorer, zero components off the solar disk.

@@ -1,0 +1,11 @@
+# Python 3.10+. Install torch/torchvision from pytorch.org if a specific CUDA
+# build is needed; the plain wheels below already cover Colab, Kaggle and Apple
+# Silicon (MPS).
+torch>=2.2
+torchvision>=0.17
+numpy>=1.24
+scipy>=1.11
+pillow>=10.0
+pycocotools>=2.0.7
+tqdm>=4.66
+matplotlib>=3.8

@@ -1,7 +1,33 @@
 {
   "experiment_id": "05",
-  "best_epoch": 10,
-  "best_validation_dice_at_0.5": 0.5921100960323178,
-  "selected_threshold": 0.3499999940395355,
-  "validation_dice_at_selected_threshold": 0.5937893679290432
+  "training": {
+    "best_epoch": 15,
+    "best_validation_dice": 0.6701207813594144,
+    "best_validation_pq": 0.33971728604314133,
+    "best_monitored_value": 0.6701207813594144,
+    "epochs_completed": 20,
+    "early_stopped": false,
+    "monitor": "validation_dice",
+    "patience": 8,
+    "min_delta": 0.001
+  },
+  "operating_point": {
+    "experiment_id": "05",
+    "checkpoint": "experiments/05/checkpoints/best_model.pt",
+    "image_size": 1024,
+    "threshold": 0.75,
+    "close": 2,
+    "min_size": 256,
+    "tta": false,
+    "validation_dice": 0.666455948744632,
+    "validation_pq": 0.40223597288750057
+  },
+  "test_metrics": {
+    "dice": 0.653330232293501,
+    "pq": 0.37653983970339144,
+    "tp": 689,
+    "fp": 511,
+    "fn": 510,
+    "mean_matched_iou": 0.6555290823283281
+  }
 }

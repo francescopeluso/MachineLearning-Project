@@ -1,0 +1,60 @@
+{
+  "recall_by_size": [
+    {
+      "range": "0-500",
+      "total": 183,
+      "matched": 57,
+      "recall": 0.3114754098360656
+    },
+    {
+      "range": "500-1000",
+      "total": 296,
+      "matched": 182,
+      "recall": 0.6148648648648649
+    },
+    {
+      "range": "1000-2000",
+      "total": 286,
+      "matched": 194,
+      "recall": 0.6783216783216783
+    },
+    {
+      "range": "2000-5000",
+      "total": 284,
+      "matched": 192,
+      "recall": 0.676056338028169
+    },
+    {
+      "range": ">5000",
+      "total": 95,
+      "matched": 67,
+      "recall": 0.7052631578947368
+    }
+  ],
+  "overall_instance_recall": 0.6048951048951049,
+  "sq": 0.6700819547550184,
+  "rq": 0.6067514248136782,
+  "fn_causes": {
+    "pure_miss": 233,
+    "near_miss": 191,
+    "split": 28
+  },
+  "fp_causes": {
+    "hallucination": 154,
+    "merge": 13,
+    "unmatched": 278
+  },
+  "near_miss_median_area_ratio": 0.5785315985130112,
+  "operating_point": {
+    "threshold": 0.75,
+    "close": 0,
+    "min_size": 384,
+    "gate": 0.95,
+    "dice": 0.6691945144301753,
+    "pq": 0.4065731807895421,
+    "tp": 692,
+    "fp": 445,
+    "fn": 452,
+    "mean_matched_iou": 0.6700819547550184
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "experiment_id": "14",
+  "checkpoint": "experiments/14/checkpoints/best_model.pt",
+  "checkpoint_epoch": 18,
+  "selection_objective": "pq",
+  "image_size": 1536,
+  "tile": null,
+  "threshold": 0.9,
+  "close": 1,
+  "min_size": 640,
+  "gate": 0.0,
+  "tta": true,
+  "validation_dice": 0.6571702386876533,
+  "validation_pq": 0.36109493526075137
+}

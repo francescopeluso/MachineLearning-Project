@@ -1,81 +1,81 @@
-\section{Introduction}
-\label{sec:introduction}
+\section{The task, the data and the metrics}
+\label{sec:framing}
 
-The objective of this project is to identify solar filaments in solar images using Machine Learning. The problem is formulated as a \textbf{binary semantic segmentation task}: given a solar image, the model must produce a binary mask in which each pixel is classified as either \textit{filament} or \textit{background}.
+Solar filaments are ribbons of cooler plasma suspended over the solar disk, visible as
+dark, elongated structures in H-alpha images. The task is binary segmentation with an
+instance twist: given a $2048 \times 2048$ observation, predict which pixels belong to
+a filament, split the mask into one connected component per filament, and submit each
+component as a COCO run-length encoding.
 
-The analysis of the training images highlights some relevant challenges. Solar filaments usually appear as dark, thin and irregular structures over the solar disk. Their contrast with the surrounding regions can be low and their shape and size can vary considerably between different images. Moreover, the solar surface contains other structures and background noise that may have visual characteristics similar to those of a filament.
+\subsection{What the dataset looks like}
+\label{sec:dataset}
 
-Another important aspect is the strong imbalance between the two classes. Filaments generally occupy only a small portion of the complete image, while most pixels belong to the background. For this reason, correctly identifying the filament regions is more relevant than simply maximizing pixel-wise classification accuracy.
+The training set contains \textbf{707 observations} from the six stations of the GONG
+network (Big Bear, Cerro Tololo, Learmonth, Mauna Loa, El Teide, Udaipur), taken
+between 2011 and 2022 with a strong skew towards the 2011--2015 solar maximum. The
+annotations come from the MAGFiLO catalogue and carry a structure that shaped the whole
+project: each of the \textbf{1154 annotation records} is \emph{one annotator's view} of
+one observation. 411 files were annotated by a single expert, 145 by two and 151 by
+three, and the annotators genuinely disagree -- the mean Dice between two annotators of
+the \emph{same} image is $0.62$ (median $0.65$).
 
-The project therefore focuses on models capable of combining the extraction of high-level features with the preservation of fine spatial information. The quality of the resulting segmentation is evaluated mainly through the \textbf{Dice coefficient}, which measures the overlap between the predicted binary mask and the corresponding ground-truth mask.
+The 8199 annotated filaments are small and thin: the median filament covers about
+1230~pixels at native resolution (interquartile range 670--2430, 15\% below 500), and
+all filaments together cover only $\approx 0.4\%$ of the pixels. Three consequences
+drive the design. The extreme class imbalance rules out a plain cross-entropy loss;
+structures a few pixels wide are destroyed by aggressive downscaling, which will make
+\emph{resolution} the most productive variable of the study; and with only 494 training
+observations (the training set is explicitly not extendable), transfer learning and
+augmentation are the only remaining levers.
 
-\section{Proposed Approach}
-\label{sec:approach}
+\subsection{Metrics: IoU, Dice, and Panoptic Quality}
+\label{sec:metrics}
 
-\subsection{Network Architecture}
+Two masks $P$ (prediction) and $G$ (ground truth) can be compared by their
+\textbf{Intersection over Union} or by the closely related \textbf{Dice coefficient}:
+%
+\begin{equation}
+\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
+\qquad
+\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|}.
+\end{equation}
+%
+Both are pixel-level measures. Dice is what the course grades; the Kaggle submission,
+however, asks for one row per \emph{filament}, and the leaderboard reflects
+\textbf{Panoptic Quality}. Predicted and annotated instances are matched when their
+IoU exceeds $0.5$ (matched pairs are true positives, unmatched predictions false
+positives, unmatched annotations false negatives), and
+%
+\begin{equation}
+\mathrm{PQ} = \frac{\sum_{(p,g) \in \mathrm{TP}} \mathrm{IoU}(p,g)}
+                   {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}
+            = \underbrace{\frac{\sum \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
+              \times
+              \underbrace{\frac{|\mathrm{TP}|}
+                               {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}}.
+\end{equation}
+%
+The factorisation matters: \emph{Segmentation Quality} measures how well matched
+instances overlap, \emph{Recognition Quality} measures how many instances are found at
+all. The gap between Dice and PQ is the whole story of this project -- a filament
+broken into three fragments, or a correct mask surrounded by twenty ten-pixel specks,
+moves Dice by a fraction of a percent and collapses RQ.
 
-The main approach considered for this project is based on a
-\textbf{U-Net convolutional neural network}, an architecture specifically
-designed for image segmentation.
+The competition's own PQ, published in the organisers' self-evaluation notebook,
+differs from the textbook definition in three ways that all change what a good
+prediction looks like: ground truth is \emph{one instance per annotation}, not
+connected components of the union of all annotators' polygons; \emph{each annotator is
+a separate evaluation entry}, so one prediction is scored two or three times against
+experts who disagree; and TP/FP/FN accumulate \emph{globally} over the split rather
+than per image. The pipeline re-implements exactly this definition and verifies it
+against the reference code (agreement to $3 \times 10^{-8}$), so every validation
+number in this report is directly comparable with the leaderboard.
 
-The CNN architectures studied for image classification are not directly
-suitable for our problem. A classification network progressively extracts
-features from an image and finally produces a prediction for the whole
-input, such as a class label. In semantic segmentation, instead, the
-position of the detected features is also important, since the network
-must assign a class to each pixel of the image.
+\subsection{How good is good enough}
 
-U-Net addresses this problem using two main paths. The first progressively
-extracts higher-level features and reduces their spatial resolution,
-similarly to a standard CNN. The second progressively increases the
-resolution of these features until a segmentation mask is obtained.
-
-An important characteristic of U-Net is the use of \textbf{skip
-connections} between different parts of the network. These connections
-allow features containing fine spatial information to be reused when
-constructing the output mask. This is particularly useful in our problem,
-since solar filaments can be thin, irregular, and difficult to distinguish
-from the surrounding solar surface.
-
-\subsection{Advantages and Limitations}
-
-The main advantages of this approach are:
-
-\begin{itemize}
-    \item U-Net is specifically designed for pixel-wise image segmentation;
-    \item it is based mainly on convolutional operations, which are already
-          suitable for extracting spatial features from images;
-    \item skip connections help preserve information about small and thin
-          structures;
-    \item the architecture is relatively simple and can be modified to
-          experimentally evaluate different configurations.
-\end{itemize}
-
-Some limitations must also be considered:
-
-\begin{itemize}
-    \item reducing the spatial resolution may cause information about very
-          thin filaments to be lost;
-    \item processing high-resolution images requires more GPU memory;
-    \item the strong imbalance between filament and background pixels can
-          make the training more difficult;
-    \item structures with an appearance similar to filaments may generate
-          false positive predictions.
-\end{itemize}
-
-\subsection{Alternative Approaches}
-
-As an alternative, a \textbf{Residual U-Net} could be considered by
-introducing residual blocks and skip connections inside the network.
-This would allow us to investigate the residual learning techniques
-studied during the course in the context of image segmentation.
-
-Another possibility is to use a \textbf{pre-trained CNN} as part of the
-U-Net architecture and apply transfer learning and fine-tuning. This
-could be useful especially if the available training set is not large
-enough to learn robust visual features entirely from scratch.
-
-More advanced segmentation architectures could also be considered.
-However, U-Net represents a suitable starting point because of its
-relatively simple architecture and its direct use of convolutional
-layers and skip connections.
+The inter-annotator Dice of $0.62$ is a practical ceiling: past it, a model is not
+segmenting better, it is fitting one expert's notion of where a filament ends. The
+number reframes the problem -- from the second experiment onwards the model is already
+at that ceiling on Dice while PQ sits around $0.25$, so the headroom is entirely in how
+the mask is \emph{organised into instances}. Every hypothesis that follows is built on
+that observation.

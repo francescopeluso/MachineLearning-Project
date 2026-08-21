@@ -1,0 +1,46 @@
+{
+  "recall_by_size": [
+    {
+      "range": "0-500",
+      "total": 183,
+      "matched": 59,
+      "recall": 0.3224043715846995
+    },
+    {
+      "range": "500-1000",
+      "total": 296,
+      "matched": 170,
+      "recall": 0.5743243243243243
+    },
+    {
+      "range": "1000-2000",
+      "total": 286,
+      "matched": 192,
+      "recall": 0.6713286713286714
+    },
+    {
+      "range": "2000-5000",
+      "total": 284,
+      "matched": 192,
+      "recall": 0.676056338028169
+    },
+    {
+      "range": ">5000",
+      "total": 95,
+      "matched": 72,
+      "recall": 0.7578947368421053
+    }
+  ],
+  "overall_instance_recall": 0.5987762237762237,
+  "operating_point": {
+    "threshold": 0.6,
+    "close": 1,
+    "min_size": 320,
+    "dice": 0.6669947822769919,
+    "pq": 0.4003308893067343,
+    "tp": 685,
+    "fp": 461,
+    "fn": 459,
+    "mean_matched_iou": 0.6691662310309647
+  }
+}

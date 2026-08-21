@@ -1,0 +1,11 @@
+{
+  "experiment_id": "05",
+  "checkpoint": "experiments/05/checkpoints/best_model.pt",
+  "image_size": 1024,
+  "threshold": 0.75,
+  "close": 2,
+  "min_size": 256,
+  "tta": false,
+  "validation_dice": 0.666455948744632,
+  "validation_pq": 0.40223597288750057
+}

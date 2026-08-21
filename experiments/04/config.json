@@ -1,12 +1,9 @@
 {
   "experiment_id": "04",
-  "model": "U-Net con encoder ResNet18 pre-addestrato (ImageNet)",
-  "description": "Training su crop 512x512 alla risoluzione nativa; inferenza a tasselli 4x4",
+  "model": "resnet18",
+  "pretrained": true,
   "in_channels": 3,
-  "encoder": "ResNet18 (ImageNet1K_V1)",
   "trainable_parameters": 14343425,
-  "training_input": "random crop 512x512 nativi, 80% con filamento (max 10 tentativi)",
-  "validation_protocol": "griglia 4x4 tasselli 512x512, ricomposizione 2048x2048, Dice a 512x512 e nativo",
   "image_size": [
     512,
     512
@@ -22,7 +19,10 @@
   "optimizer": "AdamW",
   "learning_rate": 0.0001,
   "weight_decay": 0.0001,
-  "loss": "0.5 * BCEWithLogitsLoss + 0.5 * DiceLoss",
+  "cosine_annealing": true,
+  "loss": "bce_dice",
+  "photometric_augmentation": true,
+  "imagenet_norm": true,
   "seed": 22,
   "split_fractions": {
     "train": 0.7,
@@ -39,8 +39,8 @@
     "validation": 169,
     "test": 179
   },
-  "device": "cuda",
-  "python_version": "3.12.13",
-  "pytorch_version": "2.11.0+cu128",
-  "platform": "Linux-6.6.122+-x86_64-with-glibc2.35"
+  "device": "mps",
+  "python_version": "3.14.3",
+  "pytorch_version": "2.12.0",
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
 }

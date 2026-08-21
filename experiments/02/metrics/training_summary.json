@@ -1,7 +1,7 @@
 {
-  "best_epoch": 10,
-  "best_validation_dice": 0.645699801597369,
-  "epochs_completed": 18,
+  "best_epoch": 8,
+  "best_validation_dice": 0.6552347060110437,
+  "epochs_completed": 16,
   "early_stopped": true,
   "monitor": "validation_dice",
   "patience": 8,

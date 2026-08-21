@@ -1,0 +1,24 @@
+{
+  "path": "/Users/fp/GitHub Repos/MachineLearning-Project/submission.csv",
+  "images": 180,
+  "filaments": 1438,
+  "filaments_per_image": 7.988888888888889,
+  "images_without_filaments": 3,
+  "seconds": 220.65954979200615,
+  "gpu_memory_gb": 2.5032196044921875,
+  "recipe": {
+    "experiment_id": "15",
+    "checkpoint": "experiments/15/checkpoints/best_model.pt",
+    "checkpoint_epoch": 12,
+    "selection_objective": "pq",
+    "image_size": 1536,
+    "tile": null,
+    "threshold": 0.8,
+    "close": 0,
+    "min_size": 320,
+    "gate": 0.95,
+    "tta": true,
+    "validation_dice": 0.6768689690394102,
+    "validation_pq": 0.4197971965005265
+  }
+}

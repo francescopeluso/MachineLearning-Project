@@ -1,0 +1,7 @@
+{
+  "proposal_threshold": 0.3,
+  "proposals_per_image": 17.22641509433962,
+  "covered": 0.909965034965035,
+  "boxed": 0.8085664335664335,
+  "single_stage_recall": 0.6477272727272727
+}

@@ -1,0 +1,27 @@
+{
+  "experiment_id": "08",
+  "training": {
+    "best_epoch": 9,
+    "best_validation_dice": 0.6671054925791611,
+    "epochs_completed": 17,
+    "seconds_per_epoch": 51.301430462588215,
+    "total_minutes": 14.544525313216669,
+    "peak_training_memory_gb": 5.20054292678833
+  },
+  "operating_point": {
+    "experiment_id": "08",
+    "checkpoint": "experiments/08/checkpoints/best_model.pt",
+    "checkpoint_epoch": 9,
+    "selection_objective": "pq",
+    "image_size": 1536,
+    "tile": null,
+    "threshold": 0.48,
+    "close": 1,
+    "min_size": 384,
+    "gate": 0.97,
+    "tta": true,
+    "validation_dice": 0.6678332412820599,
+    "validation_pq": 0.4263933021511007
+  },
+  "test_metrics": null
+}

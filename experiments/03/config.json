@@ -1,9 +1,8 @@
 {
   "experiment_id": "03",
-  "model": "U-Net con encoder ResNet18 pre-addestrato (ImageNet)",
-  "description": "Transfer learning: fine-tuning dell'encoder ResNet18, decoder U-Net invariato",
+  "model": "resnet18",
+  "pretrained": true,
   "in_channels": 3,
-  "encoder": "ResNet18 (ImageNet1K_V1)",
   "trainable_parameters": 14343425,
   "image_size": [
     512,
@@ -20,7 +19,10 @@
   "optimizer": "AdamW",
   "learning_rate": 0.0001,
   "weight_decay": 0.0001,
-  "loss": "0.5 * BCEWithLogitsLoss + 0.5 * DiceLoss",
+  "cosine_annealing": false,
+  "loss": "tversky_cldice",
+  "photometric_augmentation": false,
+  "imagenet_norm": false,
   "seed": 22,
   "split_fractions": {
     "train": 0.7,
@@ -40,5 +42,5 @@
   "device": "mps",
   "python_version": "3.14.3",
   "pytorch_version": "2.12.0",
-  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  "platform": "macOS-26.6.1-arm64-arm-64bit-Mach-O"
 }

@@ -1,25 +1,38 @@
 \documentclass[12pt,a4paper]{article}
 
-% Impostazioni di base del documento
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[italian]{babel}
-\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage[a4paper,margin=2.0cm]{geometry}
 \usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{booktabs}
+\usepackage{caption}
 \usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.5em}
+\setlength{\parskip}{0.35em}
+\captionsetup{font=small}
 
-% Informazioni del frontespizio
+% Titoli piu compatti: a 12pt i default sprecano molto spazio verticale.
+\titlespacing*{\section}{0pt}{1.1em}{0.5em}
+\titlespacing*{\subsection}{0pt}{0.8em}{0.3em}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+
+% Lascia che i float riempiano di piu la pagina prima di arrendersi.
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.75}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.85}
+
 \newcommand{\university}{Università degli Studi di Salerno}
-\newcommand{\degreecourse}{Corso di Laurea Magistrale in Ingegneria Informatica}
-\newcommand{\reporttitle}{Segmentazione dei filamenti solari}
+\newcommand{\degreecourse}{Laurea Magistrale in Ingegneria Informatica, DIEM}
+\newcommand{\reporttitle}{Segmentazione di filamenti solari}
 \newcommand{\teamname}{2026\_MLrec\_gr02}
-\newcommand{\members}{Francesco Peluso}
+\newcommand{\members}{Francesco Peluso \quad \texttt{IE22700088}}
 \newcommand{\academicyear}{2025/2026}
 
 \begin{document}
@@ -27,36 +40,32 @@
 
 \begin{titlepage}
   \centering
-
   {\Large \university\par}
   \vspace{0.4cm}
   {\large \degreecourse\par}
-
   \vfill
-
   {\Huge\bfseries \reporttitle\par}
-  \vspace{0.5cm}
-  {\Large Relazione del progetto di Machine Learning\par}
-
+  \vspace{0.6cm}
+  {\Large Project work di Machine Learning\par}
   \vfill
-
   {\large
-    \textbf{Gruppo}\par
-    \teamname\par
+    \textbf{Team}\par \teamname\par
     \vspace{0.6cm}
-    \textbf{Componenti}\par
-    \members\par
+    \textbf{Componente}\par \members\par
+    \vspace{0.4cm}
+    \texttt{f.peluso29@studenti.unisa.it}\par
   }
-
   \vfill
-
   {\large Anno accademico \academicyear\par}
 \end{titlepage}
 
 \pagenumbering{arabic}
 
-\include{chapters/chapter_1_it}
-\include{chapters/chapter_2_it}
-\include{chapters/chapter_3}
+\input{chapters/chapter_1_it}
+\input{chapters/chapter_2_it}
+\input{chapters/chapter_3_it}
+\input{chapters/chapter_4_it}
+\input{chapters/chapter_5_it}
+\input{chapters/chapter_6_it}
 
 \end{document}

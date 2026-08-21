@@ -1,0 +1,16 @@
+{
+  "threshold": 0.7,
+  "min_size": 256,
+  "close": 2,
+  "pixel_precision": 0.6913301943148453,
+  "pixel_recall": 0.6934608293628656,
+  "gt_components": 1171,
+  "found_as_single_piece": 0.7455166524338173,
+  "split_in_three_or_more": 0.008539709649871904,
+  "missed_entirely": 0.20068317677198974,
+  "ghost_components": 173,
+  "ghosts_per_image": 1.0236686390532543,
+  "ghost_median_size": 679.0,
+  "ghosts_below_16px": 0.0,
+  "ghosts_below_64px": 0.0
+}

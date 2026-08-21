@@ -1,0 +1,8 @@
+{
+  "best_epoch": 7,
+  "best_crop_dice": 0.8056722516780133,
+  "epochs_completed": 11,
+  "seconds_per_epoch": 35.976521490636394,
+  "total_minutes": 6.605296901766667,
+  "peak_training_memory_gb": 3.1805171966552734
+}

@@ -1,0 +1,153 @@
+\section{Seconda campagna: le istanze}
+\label{sec:second-campaign}
+
+La prima campagna si è chiusa con una diagnosi -- ciò che limita il punteggio è il
+riconoscimento delle istanze -- e la seconda l'ha attaccata, con la stessa disciplina:
+un'ipotesi per run, i risultati falsificati riportati con la stessa cura di quelli
+confermati. Dall'Esperimento~7 in poi il test interno è incorporato nel training
+($+22\%$ di dati), cosa legittima proprio perché non viene mai usato per scegliere
+alcunché.
+
+\begin{table}[ht]
+    \centering
+    \caption{Seconda campagna, ogni run al proprio operating point, valutata con la
+    metrica ufficiale a $2048^2$ (non confrontabile con la Tabella~\ref{tab:experiments},
+    che è a soglia fissa senza post-processing).}
+    \label{tab:experiments-2}
+    \small\begin{tabular}{clrrl}
+        \toprule
+        Esp. & Cosa cambia & Dice & PQ & Verdetto \\
+        \midrule
+        7  & test interno nel training, ancora $1024$   & 0,6544 & 0,3775 & superato dall'8 \\
+        8  & $1024 \to 1536$, TTA D4, gate di confidenza & \textbf{0,6729} & \textbf{0,4194} & \textbf{modello finale} \\
+        9  & + termine clDice a $1536$, warm start       & 0,6686 & 0,4064 & falsificato \\
+        10 & scale jitter $\pm 25\%$                     & 0,6670 & 0,4003 & falsificato \\
+        11 & cascata detect-then-refine                  & 0,6560 & 0,3947 & falsificato \\
+        12 & target di consenso soft                     & 0,6687 & 0,3863 & falsificato \\
+        13 & 2048 nativo, finestre casuali da 1536       & 0,6692 & 0,4066 & falsificato \\
+        14 & Dice bilanciato per istanza, peso 0,35      & 0,6572 & 0,3611 & falsificato \\
+        15 & peso 20 sulla classe positiva (BCE)         & \textbf{0,6769} & 0,4198 & falsificato per 0,007 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Il tetto è il disaccordo tra annotatori, e vincola SQ}
+
+Fattorizzata, la $\mathrm{PQ} = 0{,}4264$ del punto spedito è $\mathrm{SQ} = 0{,}668
+\times \mathrm{RQ} = 0{,}638$ su 1144 istanze di ground truth (TP~712, FP~376, FN~432).
+In tredici esperimenti, con ogni capacità, risoluzione e architettura provata, SQ si è
+mossa dentro $0{,}66$--$0{,}68$ e non oltre -- contro un accordo tra coppie di
+annotatori umani di $0{,}59$. La conclusione è scomoda ma utile: \textbf{SQ è una
+proprietà del processo di annotazione, non del modello}. Ogni punto di PQ ancora sul
+tavolo passa da RQ: trovare più filamenti tra quelli marcati dagli annotatori,
+predirne meno tra quelli non marcati.
+
+\subsection{Dove sta davvero l'errore}
+
+All'operating point spedito, i 432 falsi negativi si dividono in 244 \emph{pure miss}
+(nemmeno un pixel predetto sull'istanza), 159 \emph{near miss} (un blob c'è ma resta a
+IoU $\le 0{,}5$, rapporto d'area predetta/vera mediano $0{,}62$ -- il modello
+sotto-segmenta sistematicamente) e 29 \emph{split}; i 376 falsi positivi in 128
+\emph{allucinazioni}, 239 su filamenti annotati ma non accoppiati e 9 \emph{merge}. Il
+recall per istanza crolla con la dimensione, da $0{,}34$ sotto i 500~pixel a $0{,}75$
+sopra i 5000 (Figura~\ref{fig:predictions}); al punto bilanciato, più orientato al
+recall, la fascia più piccola sale a $0{,}475$ al costo di 62 falsi positivi in più, ed
+è lì che è stata letta la diagnosi dietro la prossima campagna. Dominano due famiglie
+-- recall sulle istanze piccole e sotto-segmentazione; split e merge sono sotto il
+$4\%$ del totale, ed è per questo che nessun meccanismo di split/merge è mai stato
+costruito.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.78\linewidth]{../experiments/08/plots/validation_predictions.png}
+    \caption{Modello finale su tre osservazioni di validazione: ground truth
+    dell'annotatore, mappa di probabilità predetta e istanze all'operating point
+    spedito. Gli errori si concentrano sui filamenti piccoli e deboli.}
+    \label{fig:predictions}
+\end{figure}
+
+Due avvertenze qualificano questi conteggi, ed entrambe sono state verificate. Primo:
+gli organizzatori hanno confermato nel forum della competizione che le annotazioni sono
+\emph{incomplete} -- filamenti visibili possono mancare -- quindi parte delle 128
+allucinazioni sono plausibilmente filamenti veri che nessun annotatore ha marcato;
+misurato sui file multi-annotatore, perfino i blob con picco di probabilità sopra
+$0{,}85$ sono marcati in media solo dal $63\%$ degli annotatori, ed è per questo che
+all'ottimo di PQ sta il gate di confidenza, non una spinta al recall. Secondo: la
+commissione legge, accanto al punteggio, la distribuzione \emph{many-to-one /
+one-to-many} (Figura~\ref{fig:distributions}): qui la struttura degli accoppiamenti è
+quasi uno-a-uno -- su 1144 istanze annotate, 900 sono toccate da almeno una predizione
+e solo 67 da più di una; su 1088 predizioni, 960 toccano un filamento annotato e solo
+20 più di uno.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.98\linewidth]{../experiments/08/plots/official_distributions.png}
+    \caption{Le distribuzioni riportate dal notebook di autovalutazione degli
+    organizzatori, per il modello spedito sulla validazione: IoU e Dice su ogni coppia
+    ground-truth/predizione sovrapposta, e le relazioni many-to-one / one-to-many
+    (un hit è un qualunque overlap; il vincolo IoU $> 0{,}5$ della metrica è più
+    severo).}
+    \label{fig:distributions}
+\end{figure}
+
+\subsection{Meccanismi misurati e scartati}
+\label{sec:falsified}
+
+Diversi meccanismi plausibili sono stati valutati e scartati -- quasi tutti a basso
+costo, sulle mappe di probabilità \emph{congelate} del modello finale, riprodotte
+bit-per-bit su una seconda macchina così che ogni idea di istanziazione si potesse
+misurare in minuti, senza addestrare.
+
+\textbf{Topologia e cascate.} clDice a $1536$, dove lo scheletro soft è finalmente
+significativo, perde comunque $0{,}013$ PQ (Esp.~9); una cascata detect-then-refine
+perde $0{,}025$ (Esp.~11). Entrambe attaccano la frammentazione, che l'analisi
+dell'errore aveva già mostrato marginale. I \textbf{target di consenso soft} (Esp.~12)
+trasformano il disaccordo tra annotatori nell'etichetta; la calibrazione quasi non si
+muove e la PQ scende di $0{,}033$. Lo \textbf{scale jitter} (Esp.~10) costa $0{,}019$.
+Le \textbf{soglie locali per componente} ($\tau_c = \alpha \cdot \mathrm{picco}_c$, o
+un quantile della massa di probabilità della componente) dovrebbero correggere la
+sotto-segmentazione senza ingrassare le componenti già corrette; misurate, perdono
+contro la soglia globale, perché ogni componente sopravvissuta ha picco vicino a
+$1{,}0$ e il taglio locale collassa in uno globale. La \textbf{dilatazione per
+componente} (trasformata di distanza verso la componente più vicina, quindi i merge
+sono impossibili) perde a ogni raggio -- $\delta = 1$~px costa già $0{,}03$ PQ --
+perché i near miss non sono copie erose del vero ma hanno forma diversa, tipicamente
+senza una coda debole. L'\textbf{ensemble di mappe di probabilità} perde due volte: con i fratelli deboli
+(Esp.~9, 10, 12), la cui calibrazione diversa diluisce le rilevazioni marginali, e
+perfino con l'Esp.~15, quasi pari e dal bias opposto -- un guadagno aggregato di
+$+0{,}003$ che in cross-selection finisce \emph{sotto} il modello singolo. La regola
+che emerge: su 169 voci di validazione, ogni guadagno sotto $\approx +0{,}005$ è
+indistinguibile dal rumore di selezione. E \textbf{Mask~R-CNN} è stata
+scartata sulla carta: ricostruisce ogni maschera da una griglia $28 \times 28$ dentro
+un box allineato agli assi, un sovracampionamento di $\sim\!25\times$ per asse per
+strutture la cui proprietà distintiva è essere larghe pochi pixel e lunghe centinaia.
+
+Anche la \textbf{ricucitura post-hoc dei filamenti spezzati} è stata prima limitata e
+poi falsificata. Un oracolo che unisce, conoscendo la ground truth, esattamente i
+pezzi che trasformerebbero uno split in un match guadagna $+0{,}017$ PQ -- ma solo 18
+dei suoi 29 gruppi si convertono davvero, perché gli annotatori sono in disaccordo
+sulla connettività stessa. Nessun meccanismo cieco cattura quel tetto: ri-etichettare
+due istanze come una quando sono connesse a una soglia di probabilità bassa (senza
+aggiungere pixel, quindi il Dice non si muove) guadagna $+0{,}004$ in aggregato, ma in
+cross-selection le due metà di validazione scelgono gli estremi opposti della griglia
+del parametro e il guadagno trasferito è $-0{,}006$ -- rumore di selezione, non
+segnale; unire per vicinanza spaziale perde a ogni raggio utile. I ponti a bassa
+probabilità non distinguono un filamento spezzato da due filamenti vicini.
+
+Che i meccanismi su estensione e ricucitura falliscano allo stesso modo è la scoperta
+della campagna: sotto-segmentazione e frammentazione vivono entrambe nel supporto di
+probabilità del modello, non nella sogliatura. Nessun post-processing può reclamarle;
+solo modifiche all'addestramento possono.
+
+\subsection{Validazione contro leaderboard}
+\label{sec:gap}
+
+Il punteggio pubblico è sistematicamente sotto la validazione, e il divario si scompone
+in parti misurate: una submission iniziale prodotta da una ricetta non definitiva
+(vale $\sim$0,02); la normale generalizzazione verso un diverso insieme di annotatori
+($\sim$0,026, misurata una volta sul test interno); e la composizione ($\le 0{,}01$ --
+la PQ stratificata per numero di annotatori, stazione GONG e anno varia entro il rumore
+di conteggio, e il mix stazioni/anni del test rispecchia la validazione). Il percorso
+di submission è stato verificato pulito: componenti disgiunte per costruzione,
+convenzioni RLE allineate allo scorer degli organizzatori, zero componenti fuori dal
+disco solare.

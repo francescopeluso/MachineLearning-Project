@@ -1,6 +1,8 @@
 {
-  "best_epoch": 20,
-  "best_validation_dice": 0.6092635436280732,
+  "best_epoch": 18,
+  "best_validation_dice": 0.6590642620268653,
+  "best_validation_pq": 0.26555633859046884,
+  "best_monitored_value": 0.6590642620268653,
   "epochs_completed": 20,
   "early_stopped": false,
   "monitor": "validation_dice",

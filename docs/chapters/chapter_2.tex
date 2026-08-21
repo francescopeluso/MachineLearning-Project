@@ -1,172 +1,93 @@
-\section{U-Net Architecture}
-\label{sec:unet}
+\section{Model and pipeline}
+\label{sec:method}
 
-\begin{figure}[ht]
+\subsection{A U-Net with a pre-trained ResNet18 encoder}
+
+A classification CNN compresses an image into one prediction; segmentation needs one
+per pixel, so the spatial detail the encoder discards has to be put back. U-Net does
+this with a symmetric encoder--decoder and \textbf{skip connections} that copy each
+encoder stage to the decoder stage of the same resolution
+(Figure~\ref{fig:architectures}, left). For thin, elongated, irregular structures the
+skips are not a refinement -- they are what keeps a filament from dissolving in the
+bottleneck. The network emits one logit per pixel; a sigmoid turns it into a
+probability, and a threshold selected on validation into the binary mask.
+
+The baseline (Experiment~1) uses a from-scratch encoder with 1.9M parameters. From
+Experiment~2 onwards the encoder is a \textbf{ResNet18 pre-trained on ImageNet}
+(Figure~\ref{fig:architectures}, right, without its classification head), fine-tuned
+end to end: with fewer than 500 training observations, learning basic edges and
+textures from scratch wastes the data budget. The decoder stays the same, so the
+comparison isolates the encoder. The architecture is then held fixed for the rest of
+the study on purpose -- one variable per experiment is what makes the comparisons mean
+anything.
+
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.9\linewidth]{figures/unet_architecture.png}
-    \caption{General structure of the U-Net architecture. The encoder
-    progressively reduces the spatial resolution, while the decoder
-    reconstructs the segmentation map. Skip connections transfer
-    high-resolution features between corresponding stages.}
-    \label{fig:unet}
-    \vspace{0.3em}
-    \raggedright\footnotesize Source: By Mehrdad Yazdani -- Own work, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=81055729
+    \begin{minipage}[c]{0.46\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
+    \end{minipage}\hfill
+    \begin{minipage}[c]{0.50\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
+    \end{minipage}
+    \caption{Left: the U-Net encoder--decoder with skip connections. Right: the
+    ResNet18 encoder that replaces the from-scratch one from Experiment~2 onwards;
+    its classification head (right of the figure) is discarded and the four
+    convolutional blocks feed the U-Net decoder through the skip connections.}
+    \label{fig:architectures}
 \end{figure}
 
-U-Net is a Convolutional Neural Network architecture originally designed
-for image segmentation. Unlike a standard CNN used for classification,
-which produces a single prediction for the entire input image, U-Net
-produces a prediction for each pixel. Therefore, given an input image of
-size $H \times W$, the network produces a segmentation map with the same
-spatial dimensions.
-
-The architecture follows an \textbf{encoder--decoder} structure and has
-a characteristic symmetric shape, from which the name U-Net derives.
-It can be divided into three main components: the encoder, the bottleneck,
-and the decoder.
-
-\subsection{Encoder}
-
-The \textbf{encoder} is the first part of the network and works similarly
-to a traditional CNN. Its purpose is to progressively extract more
-complex features from the input image.
-
-Each encoder stage applies convolutional operations followed by
-non-linear activation functions. Downsampling operations progressively
-reduce the spatial resolution of the feature maps while increasing their
-number of channels.
-
-A simplified example is:
-
+One free optimisation is worth a paragraph. Feeding grayscale to an ImageNet encoder
+normally means replicating the channel three times and normalising with the RGB mean
+$m_c$ and standard deviation $s_c$. Writing out the stem pre-activation for a grayscale
+image $g$ shows the redundancy:
+%
 \begin{equation}
-H \times W \times C
-\rightarrow
-\frac{H}{2} \times \frac{W}{2} \times 2C
-\rightarrow
-\frac{H}{4} \times \frac{W}{4} \times 4C
-\rightarrow \dots
+\sum_{c} W_c * \frac{g - m_c}{s_c}
+= \Bigl(\sum_{c} \frac{W_c}{s_c}\Bigr) * g \;-\; k,
 \end{equation}
+%
+where $k$ is a per-output-channel constant that the batch norm immediately after
+absorbs into its running mean. The three-channel stem is therefore replaced by an
+exactly equivalent \emph{single-channel} one: the pre-trained weights are fully
+preserved, the input tensor shrinks threefold, and normalisation disappears from the
+data pipeline.
 
-As the image passes through the encoder, the network therefore moves
-from high-resolution spatial information to more abstract features.
-This allows the network to recognize structures and patterns that are
-useful for distinguishing solar filaments from the surrounding solar
-surface.
+\subsection{Loss and training protocol}
+\label{sec:protocol}
 
-However, this process also causes a progressive loss of spatial
-information. This is not a major problem for image classification, where
-only the presence of an object or class is required, but it becomes
-important for segmentation, where the exact position of each detected
-structure must be recovered.
+The loss is an equal mix of binary cross-entropy and soft Dice. Each term does a job
+the other cannot: Dice is immune to the $0.4\%$ positive rate but says nothing about
+confidence, while BCE keeps the probabilities \emph{calibrated}, which is what makes
+the threshold search of Section~\ref{sec:operating} well behaved. Experiment~3 shows
+what happens when that calibration is lost.
 
-\subsection{Bottleneck}
+The protocol is identical in every run. The split is on \textbf{file names}, never on
+annotation records -- the same JPEG appears up to three times in the COCO file, once
+per annotator, and splitting on records would put one copy in training and another in
+validation, inflating every score. Seed 22 gives 494/106/107 observations (806/169/179
+records), written to \texttt{splits/split\_seed22.csv}; the internal test split is
+consulted once, after everything is frozen. Augmentation uses the eight symmetries of
+the square (filaments have no canonical orientation) plus photometric jitter.
+Optimisation is AdamW, batch size 2, at most 20 epochs, early stopping on validation
+Dice with patience 8. The checkpoint is selected on \textbf{Dice}, not PQ: PQ depends
+strongly on the threshold and post-processing, tuned afterwards on the same validation
+set, and selecting weights with it would optimise two coupled quantities at once.
 
-The \textbf{bottleneck} represents the deepest part of U-Net and connects
-the encoder with the decoder. At this stage, the feature maps have the
-lowest spatial resolution but contain the highest-level representation
-extracted by the network.
+\subsection{Engineering for iteration speed and memory}
 
-Its role is to provide the decoder with a compact representation of the
-input image containing the information needed to determine which
-structures are likely to correspond to solar filaments.
-
-\subsection{Decoder}
-
-The \textbf{decoder} performs the opposite spatial transformation with
-respect to the encoder. Starting from the low-resolution representation
-produced by the bottleneck, it progressively increases the spatial
-resolution of the feature maps.
-
-This process can be represented as:
-
-\begin{equation}
-\frac{H}{2^n} \times \frac{W}{2^n}
-\rightarrow \dots \rightarrow
-\frac{H}{2} \times \frac{W}{2}
-\rightarrow
-H \times W.
-\end{equation}
-
-The purpose of the decoder is therefore to transform the features
-extracted by the encoder into a pixel-wise segmentation map. A final
-convolutional layer produces one output value for each pixel. In the
-binary segmentation case, these values can be converted into filament
-probabilities using a sigmoid activation function.
-
-\subsection{Skip Connections}
-
-A simple encoder--decoder architecture would still suffer from the
-spatial information lost during downsampling. U-Net addresses this
-problem through \textbf{skip connections} between corresponding stages
-of the encoder and decoder.
-
-Instead of forcing all information to pass through the bottleneck,
-feature maps produced by the encoder are directly transferred to the
-decoder at the corresponding resolution. These features are typically
-concatenated with the decoder features before applying the following
-convolutional operations.
-
-The overall information flow can therefore be summarized as:
-
-\begin{center}
-\texttt{Input $\rightarrow$ Encoder $\rightarrow$ Bottleneck
-$\rightarrow$ Decoder $\rightarrow$ Segmentation Mask}
-\end{center}
-
-with additional skip connections:
-
-\begin{center}
-\texttt{Encoder features $\longrightarrow$ Decoder features}.
-\end{center}
-
-This mechanism allows the decoder to combine two different types of
-information:
-
-\begin{itemize}
-    \item \textbf{high-level features}, produced by the deeper layers,
-    which help determine whether a structure represents a filament;
-    \item \textbf{fine spatial features}, obtained from the earlier
-    encoder layers, which help reconstruct its position, shape and
-    boundaries.
-\end{itemize}
-
-This characteristic is particularly relevant for our dataset. Solar
-filaments can be thin, elongated and irregular structures, and excessive
-loss of spatial information during downsampling could cause them to be
-incorrectly reconstructed or fragmented.
-
-\subsection{U-Net for Binary Segmentation}
-
-For the considered task, U-Net is configured to produce a single output
-channel. For every pixel $(i,j)$, the network produces a logit
-$z_{ij}$, which can be converted into a probability through the sigmoid
-function:
-
-\begin{equation}
-p_{ij} = \sigma(z_{ij})
-       = \frac{1}{1 + e^{-z_{ij}}}.
-\end{equation}
-
-The resulting probability map has the same spatial dimensions as the
-input segmentation mask. A threshold $t$ can then be applied to obtain
-the final binary prediction:
-
-\begin{equation}
-\hat{y}_{ij} =
-\begin{cases}
-1, & p_{ij} \geq t, \\
-0, & p_{ij} < t.
-\end{cases}
-\end{equation}
-
-Therefore, the complete process can be summarized as:
-
-\begin{equation}
-\text{Solar Image}
-\rightarrow
-\text{U-Net}
-\rightarrow
-\text{Probability Map}
-\rightarrow
-\text{Binary Filament Mask}.
-\end{equation}
+Decoding a $2048^2$ JPEG and rasterising its polygons costs more than a forward and
+backward pass; done inside the dataset, that price recurs every epoch. All images and
+masks are therefore decoded \emph{once} into memory-mapped uint8 arrays (masks
+bit-packed: the whole ground truth at $1024^2$ takes 150~MB instead of 1.2~GB), and
+every run reuses the cache. Training runs in mixed precision with gradient
+checkpointing at the higher resolutions; peak GPU memory is measured at the moment a
+step actually peaks, not estimated from parameter counts. Against the assignment's
+optional budget (5~GB training, 4~GB test), inference stays well inside at 2.5~GB;
+training measured 3.7~GB at $1024^2$ and 5.2~GB for the full-frame $1536^2$ recipe of
+the final model -- a windowed-native configuration (Experiment~13,
+Section~\ref{sec:second-campaign}) brings the same step to 3.0~GB, though it lost PQ
+and was not kept. Validation probability maps are stored as uint8 --
+the threshold grid steps far coarser than $1/255$ -- which is what makes the joint
+operating-point search of Section~\ref{sec:operating} affordable at native resolution.

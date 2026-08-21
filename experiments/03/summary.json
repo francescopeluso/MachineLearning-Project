@@ -1,7 +1,9 @@
 {
   "experiment_id": "03",
-  "best_epoch": 8,
-  "best_validation_dice_at_0.5": 0.6552347060110437,
-  "selected_threshold": 0.44999998807907104,
-  "validation_dice_at_selected_threshold": 0.6553913950920105
+  "best_epoch": 13,
+  "best_validation_dice_at_0.5": 0.49365921082397723,
+  "best_validation_pq_at_0.5": 0.061809606052295046,
+  "selected_threshold": 0.9,
+  "validation_dice_at_selected_threshold": 0.5620225325729034,
+  "validation_pq_at_selected_threshold": 0.15265528481699567
 }

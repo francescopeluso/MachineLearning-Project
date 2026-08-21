@@ -1,177 +1,96 @@
-\section{Architettura U-Net}
-\label{sec:unet}
+\section{Modello e pipeline}
+\label{sec:method}
 
-\begin{figure}[ht]
+\subsection{Una U-Net con encoder ResNet18 pre-addestrato}
+
+Una CNN di classificazione comprime l'immagine in un'unica predizione; la
+segmentazione ne richiede una per pixel, quindi il dettaglio spaziale che l'encoder
+scarta va reintrodotto. La U-Net lo fa con un encoder--decoder simmetrico e con le
+\textbf{skip connection} che copiano ogni stadio dell'encoder nello stadio del decoder
+alla stessa risoluzione (Figura~\ref{fig:architectures}, a sinistra). Per strutture
+sottili, allungate e irregolari le skip non sono una rifinitura: sono ciò che impedisce
+a un filamento di dissolversi nel collo di bottiglia. La rete emette un logit per
+pixel; una sigmoide lo trasforma in probabilità e una soglia scelta in validazione
+nella maschera binaria.
+
+La baseline (Esperimento~1) usa un encoder addestrato da zero con 1,9M di parametri.
+Dall'Esperimento~2 in poi l'encoder è una \textbf{ResNet18 pre-addestrata su ImageNet}
+(Figura~\ref{fig:architectures}, a destra, senza la testa di classificazione),
+raffinata end-to-end: con meno di 500 osservazioni di training, imparare da zero bordi
+e texture spreca il budget di dati. Il decoder resta lo stesso, quindi il confronto
+isola l'encoder. L'architettura viene poi tenuta fissa per il resto dello studio, di
+proposito: una variabile per esperimento è ciò che dà senso ai confronti.
+
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.9\linewidth]{figures/unet_architecture.png}
-    \caption{Struttura generale dell'architettura U-Net. L'encoder riduce
-    progressivamente la risoluzione spaziale, mentre il decoder ricostruisce
-    la mappa di segmentazione. Le connessioni di salto trasferiscono le
-    caratteristiche ad alta risoluzione tra gli stadi corrispondenti.}
-    \label{fig:unet}
-    \vspace{0.3em}
-    \raggedright\footnotesize Fonte: Mehrdad Yazdani -- Opera propria, CC BY-SA 4.0, https://commons.wikimedia.org/w/index.php?curid=81055729
+    \begin{minipage}[c]{0.46\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
+    \end{minipage}\hfill
+    \begin{minipage}[c]{0.50\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
+    \end{minipage}
+    \caption{A sinistra: l'encoder--decoder U-Net con le skip connection. A destra:
+    l'encoder ResNet18 che sostituisce quello da zero dall'Esperimento~2 in poi; la
+    testa di classificazione (a destra nella figura) viene scartata e i quattro blocchi
+    convoluzionali alimentano il decoder U-Net attraverso le skip connection.}
+    \label{fig:architectures}
 \end{figure}
 
-U-Net è un'architettura di rete neurale convoluzionale originariamente
-progettata per la segmentazione delle immagini. A differenza di una CNN
-standard utilizzata per la classificazione, che produce un'unica predizione
-per l'intera immagine in ingresso, U-Net produce una predizione per ogni
-pixel. Pertanto, data un'immagine in ingresso di dimensioni $H \times W$,
-la rete produce una mappa di segmentazione con le stesse dimensioni spaziali.
-
-L'architettura segue una struttura \textbf{encoder--decoder} e presenta una
-caratteristica forma simmetrica, dalla quale deriva il nome U-Net. Può essere
-suddivisa in tre componenti principali: l'encoder, il collo di bottiglia
-(\textit{bottleneck}) e il decoder.
-
-\subsection{Encoder}
-
-L'\textbf{encoder} è la prima parte della rete e opera in modo simile a una
-CNN tradizionale. Il suo scopo è estrarre progressivamente caratteristiche
-sempre più complesse dall'immagine in ingresso.
-
-Ogni stadio dell'encoder applica operazioni convoluzionali seguite da
-funzioni di attivazione non lineari. Le operazioni di sottocampionamento
-(\textit{downsampling}) riducono progressivamente la risoluzione spaziale
-delle mappe delle caratteristiche, aumentandone al contempo il numero di
-canali.
-
-Un esempio semplificato è:
-
+Un'ottimizzazione gratuita merita un paragrafo. Dare un'immagine in scala di grigi a un
+encoder ImageNet di solito significa replicare il canale tre volte e normalizzare con
+media $m_c$ e deviazione standard $s_c$ RGB. Scrivendo la pre-attivazione dello stem
+per un'immagine $g$ la ridondanza è evidente:
+%
 \begin{equation}
-H \times W \times C
-\rightarrow
-\frac{H}{2} \times \frac{W}{2} \times 2C
-\rightarrow
-\frac{H}{4} \times \frac{W}{4} \times 4C
-\rightarrow \dots
+\sum_{c} W_c * \frac{g - m_c}{s_c}
+= \Bigl(\sum_{c} \frac{W_c}{s_c}\Bigr) * g \;-\; k,
 \end{equation}
+%
+dove $k$ è una costante per canale d'uscita che la batch norm immediatamente
+successiva assorbe nella propria media. Lo stem a tre canali viene quindi sostituito
+da uno \emph{a canale singolo} esattamente equivalente: i pesi pre-addestrati sono
+interamente preservati, il tensore d'ingresso si riduce di tre volte e la
+normalizzazione sparisce dalla pipeline dei dati.
 
-Durante il passaggio dell'immagine attraverso l'encoder, la rete passa
-quindi da informazioni spaziali ad alta risoluzione a caratteristiche più
-astratte. In questo modo può riconoscere strutture e configurazioni utili
-per distinguere i filamenti solari dalla superficie solare circostante.
+\subsection{Loss e protocollo di addestramento}
+\label{sec:protocol}
 
-Tuttavia, questo processo provoca anche una perdita progressiva di
-informazioni spaziali. Ciò non costituisce un problema rilevante per la
-classificazione delle immagini, in cui è richiesta soltanto la presenza di
-un oggetto o di una classe, ma diventa importante nella segmentazione, in
-cui occorre recuperare la posizione esatta di ogni struttura rilevata.
+La loss è una miscela in parti uguali di binary cross-entropy e soft Dice. Ogni termine
+fa un lavoro che l'altro non può fare: il Dice è immune al tasso di positivi dello
+$0{,}4\%$ ma non dice nulla sulla confidenza, mentre la BCE mantiene le probabilità
+\emph{calibrate}, che è ciò che rende ben condizionata la ricerca della soglia della
+Sezione~\ref{sec:operating}. L'Esperimento~3 mostra cosa succede quando quella
+calibrazione si perde.
 
-\subsection{Collo di bottiglia}
+Il protocollo è identico in ogni run. Lo split è sui \textbf{nomi dei file}, mai sui
+record di annotazione -- lo stesso JPEG compare fino a tre volte nel file COCO, una per
+annotatore, e dividere per record metterebbe una copia in training e una in
+validazione, gonfiando ogni punteggio. Il seed 22 dà 494/106/107 osservazioni
+(806/169/179 record), salvate in \texttt{splits/split\_seed22.csv}; il test interno si
+consulta una volta sola, a tutto congelato. L'augmentation usa le otto simmetrie del
+quadrato (i filamenti non hanno orientamento canonico) più jitter fotometrico.
+L'ottimizzazione è AdamW, batch size 2, al più 20 epoche, early stopping sul Dice di
+validazione con pazienza 8. Il checkpoint si sceglie sul \textbf{Dice}, non sulla PQ:
+la PQ dipende fortemente da soglia e post-processing, regolati dopo sullo stesso
+insieme di validazione, e scegliere i pesi con essa ottimizzerebbe due quantità
+accoppiate in un colpo solo.
 
-Il \textbf{collo di bottiglia} (\textit{bottleneck}) rappresenta la parte
-più profonda di U-Net e collega l'encoder al decoder. In questo stadio, le
-mappe delle caratteristiche presentano la risoluzione spaziale più bassa,
-ma contengono la rappresentazione di più alto livello estratta dalla rete.
+\subsection{Ingegneria: velocità di iterazione e memoria}
 
-Il suo ruolo è fornire al decoder una rappresentazione compatta
-dell'immagine in ingresso, contenente le informazioni necessarie a
-determinare quali strutture possano corrispondere a filamenti solari.
-
-\subsection{Decoder}
-
-Il \textbf{decoder} esegue la trasformazione spaziale opposta rispetto
-all'encoder. A partire dalla rappresentazione a bassa risoluzione prodotta
-dal collo di bottiglia, aumenta progressivamente la risoluzione spaziale
-delle mappe delle caratteristiche.
-
-Questo processo può essere rappresentato come segue:
-
-\begin{equation}
-\frac{H}{2^n} \times \frac{W}{2^n}
-\rightarrow \dots \rightarrow
-\frac{H}{2} \times \frac{W}{2}
-\rightarrow
-H \times W.
-\end{equation}
-
-Lo scopo del decoder è quindi trasformare le caratteristiche estratte
-dall'encoder in una mappa di segmentazione a livello di pixel. Uno strato
-convoluzionale finale produce un valore di uscita per ogni pixel. Nel caso
-della segmentazione binaria, tali valori possono essere convertiti in
-probabilità di appartenenza a un filamento mediante una funzione di
-attivazione sigmoide.
-
-\subsection{Connessioni di salto}
-
-Una semplice architettura encoder--decoder risentirebbe comunque della
-perdita di informazioni spaziali causata dal sottocampionamento. U-Net
-affronta questo problema mediante \textbf{connessioni di salto}
-(\textit{skip connections}) tra gli stadi corrispondenti dell'encoder e del
-decoder.
-
-Anziché costringere tutte le informazioni a passare attraverso il collo di
-bottiglia, le mappe delle caratteristiche prodotte dall'encoder vengono
-trasferite direttamente al decoder in corrispondenza della medesima
-risoluzione. In genere, queste caratteristiche vengono concatenate con
-quelle del decoder prima di applicare le successive operazioni
-convoluzionali.
-
-Il flusso informativo complessivo può quindi essere riassunto come segue:
-
-\begin{center}
-\texttt{Ingresso $\rightarrow$ Encoder $\rightarrow$ Collo di bottiglia
-$\rightarrow$ Decoder $\rightarrow$ Maschera di segmentazione}
-\end{center}
-
-con connessioni di salto aggiuntive:
-
-\begin{center}
-\texttt{Caratteristiche dell'encoder $\longrightarrow$ Caratteristiche del decoder}.
-\end{center}
-
-Questo meccanismo consente al decoder di combinare due diversi tipi di
-informazioni:
-
-\begin{itemize}
-    \item \textbf{caratteristiche di alto livello}, prodotte dagli strati
-          più profondi, che aiutano a determinare se una struttura
-          rappresenta un filamento;
-    \item \textbf{caratteristiche spaziali fini}, ottenute dai primi strati
-          dell'encoder, che aiutano a ricostruirne la posizione, la forma e
-          i contorni.
-\end{itemize}
-
-Questa caratteristica è particolarmente rilevante per il nostro insieme di
-dati. I filamenti solari possono essere strutture sottili, allungate e
-irregolari; un'eccessiva perdita di informazioni spaziali durante il
-sottocampionamento potrebbe quindi causarne una ricostruzione errata o
-frammentata.
-
-\subsection{U-Net per la segmentazione binaria}
-
-Per l'attività considerata, U-Net è configurata in modo da produrre un
-singolo canale di uscita. Per ogni pixel $(i,j)$, la rete produce un logit
-$z_{ij}$, che può essere convertito in una probabilità mediante la funzione
-sigmoide:
-
-\begin{equation}
-p_{ij} = \sigma(z_{ij})
-       = \frac{1}{1 + e^{-z_{ij}}}.
-\end{equation}
-
-La mappa di probabilità risultante presenta le stesse dimensioni spaziali
-della maschera di segmentazione in ingresso. È quindi possibile applicare
-una soglia $t$ per ottenere la predizione binaria finale:
-
-\begin{equation}
-\hat{y}_{ij} =
-\begin{cases}
-1, & p_{ij} \geq t, \\
-0, & p_{ij} < t.
-\end{cases}
-\end{equation}
-
-Pertanto, il processo completo può essere riassunto come segue:
-
-\begin{equation}
-\text{Immagine solare}
-\rightarrow
-\text{U-Net}
-\rightarrow
-\text{Mappa di probabilità}
-\rightarrow
-\text{Maschera binaria dei filamenti}.
-\end{equation}
+Decodificare un JPEG $2048^2$ e rasterizzarne i poligoni costa più di un forward e un
+backward; fatto dentro il dataset, quel prezzo si ripaga a ogni epoca. Tutte le
+immagini e le maschere vengono quindi decodificate \emph{una sola volta} in array uint8
+mappati in memoria (maschere impacchettate a bit: tutta la ground truth a $1024^2$
+occupa 150~MB invece di 1,2~GB), e ogni run riusa la cache. L'addestramento gira in
+precisione mista con gradient checkpointing alle risoluzioni più alte; il picco di
+memoria GPU è misurato nel momento in cui uno step raggiunge davvero il massimo, non
+stimato dai parametri. Rispetto al budget opzionale della consegna (5~GB in training,
+4~GB in test), l'inferenza resta ampiamente dentro a 2,5~GB; il training ha misurato
+3,7~GB a $1024^2$ e 5,2~GB per la ricetta full-frame $1536^2$ del modello finale -- una
+configurazione a finestre native (Esperimento~13, Sezione~\ref{sec:second-campaign})
+riporta lo stesso step a 3,0~GB, ma ha perso PQ e non è stata mantenuta. Le mappe di probabilità di
+validazione sono salvate in uint8 -- la griglia delle soglie ha passi molto più grossi
+di $1/255$ -- ed è questo che rende sostenibile a risoluzione nativa la ricerca
+congiunta dell'operating point della Sezione~\ref{sec:operating}.

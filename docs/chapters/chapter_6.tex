@@ -1,0 +1,43 @@
+\section{Results, conclusions and what comes next}
+\label{sec:next}
+
+The delivered model is Experiment~8 -- ResNet18-U-Net at $1536^2$, D4 test-time
+augmentation -- with the operating point re-selected on pure PQ: validation Dice
+$0.668$, PQ $\mathbf{0.4264}$ ($t=0.48$, closing 1, minimum size 384, confidence gate
+$0.97$). The submission is fully reproducible: the training notebook re-derives exactly
+this recipe from the frozen checkpoint, and the inference notebook regenerates a
+byte-identical \texttt{submission.csv}.
+
+Three lessons generalise beyond this dataset. \textbf{Measure what the score measures,
+where it measures it}: selecting the operating point at native resolution, against the
+organisers' own PQ definition, and on the objective the leaderboard actually reports
+was worth $+0.020$ Dice and $+0.031$ PQ combined -- all free, with no retraining.
+\textbf{Pick the metric that sees the failure mode}: Dice crossed the inter-annotator
+ceiling at Experiment~2 and stayed flat; every real improvement afterwards was visible
+only in PQ's recognition term. An evaluation restricted to the graded metric would have
+declared the project finished ten experiments early. \textbf{A falsified hypothesis is
+not a wasted run}: ten ideas were measured and rejected in this study, and each
+rejection redirected the effort -- Experiment~3's failure exposed the resolution
+problem, and the failure of every post-hoc extent mechanism
+(Section~\ref{sec:falsified}) is precisely what shows the remaining error must be
+attacked in training.
+
+One of the prepared follow-ups has already been run and falsified: training on random
+$1536^2$ windows of the native $2048^2$ frame (Experiment~13) lost $0.020$ PQ and
+pushed recall below 500~pixels down to $0.31$ -- windowed training gives up the
+full-disk context without buying the small filaments, and it closes the resolution
+road ($+0.136$, $+0.009$, $-0.020$ across the three scale steps). The instance-balanced loss (Experiment~14) was
+then falsified as a \emph{dominant} term: with the global Dice demoted, false-positive
+control collapsed and small-instance recall fell to $0.09$ -- yet recall on 2000--5000
+pixel instances improved to $0.76$, so the term earns a retest at nudge weight, the
+same arc as Experiments~3 and~9. The positive-class weight
+(Experiment~15) then delivered the campaign's most instructive miss: the
+under-segmentation vanished (near-miss area ratio $0.62 \to 0.95$), pure misses fell
+by a fifth, and Dice set the project record at $0.677$ -- but the fatter predictions
+inflated false positives in parallel, landing $0.007$ under the champion. What closes
+the campaign is a statistical fact: on 169 validation entries, any gain below
+$\approx +0.005$ is indistinguishable from selection noise. The one prepared step that
+attacks exactly that is \emph{five-fold cross-validation}: every observation trains a
+model, and the out-of-fold predictions support an operating-point search on
+$6.7\times$ more annotator entries -- turning the gains this campaign could only
+suspect into ones it can measure.

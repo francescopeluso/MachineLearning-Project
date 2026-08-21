@@ -1,0 +1,10 @@
+{
+  "best_epoch": 12,
+  "best_validation_dice": 0.6784418381353807,
+  "best_pq_epoch": 18,
+  "best_validation_cheap_pq": 0.3369258179950682,
+  "epochs_completed": 20,
+  "seconds_per_epoch": 85.35026338304995,
+  "total_minutes": 29.16008808486667,
+  "peak_training_memory_gb": 5.200543403625488
+}

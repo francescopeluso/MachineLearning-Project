@@ -1,0 +1,43 @@
+{
+  "experiment_id": "07",
+  "model": "resnet18",
+  "pretrained": true,
+  "trainable_parameters": 14337153,
+  "image_size": 1024,
+  "batch_size": 2,
+  "loss": "bce_dice",
+  "photometric": true,
+  "scale_jitter": null,
+  "optimizer": "AdamW",
+  "learning_rate": 0.0001,
+  "weight_decay": 0.0001,
+  "cosine_annealing": true,
+  "epochs": 40,
+  "early_stopping": {
+    "monitor": "validation_dice",
+    "patience": 12,
+    "min_delta": 0.0
+  },
+  "selection_objective": "balanced",
+  "seed": 22,
+  "trained_on_test_split": true,
+  "training_files": 601,
+  "training_records": 985,
+  "files_per_split": {
+    "train": 494,
+    "validation": 106,
+    "test": 107
+  },
+  "records_per_split": {
+    "train": 806,
+    "validation": 169,
+    "test": 179
+  },
+  "device": "cuda",
+  "autocast": "torch.bfloat16",
+  "channels_last": true,
+  "num_workers": 4,
+  "torch": "2.11.0+cu128",
+  "python": "3.12.13",
+  "platform": "Linux-6.6.122+-x86_64-with-glibc2.35"
+}

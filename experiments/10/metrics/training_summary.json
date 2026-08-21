@@ -1,0 +1,8 @@
+{
+  "best_epoch": 11,
+  "best_validation_dice": 0.6494887918308653,
+  "epochs_completed": 19,
+  "seconds_per_epoch": 62.72687793563157,
+  "total_minutes": 19.874631713166664,
+  "peak_training_memory_gb": 3.395634174346924
+}

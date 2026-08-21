@@ -1,74 +1,74 @@
 {
-  "best_threshold": 0.699999988079071,
-  "best_validation_dice": 0.6461812853813171,
+  "best_threshold": 0.44999998807907104,
+  "best_validation_dice": 0.6553913950920105,
   "scores": [
     {
       "threshold": 0.10000000149011612,
-      "validation_dice": 0.6376025676727295
+      "validation_dice": 0.6493381857872009
     },
     {
       "threshold": 0.15000000596046448,
-      "validation_dice": 0.6396166086196899
+      "validation_dice": 0.6508114337921143
     },
     {
       "threshold": 0.20000000298023224,
-      "validation_dice": 0.640982985496521
+      "validation_dice": 0.6526989936828613
     },
     {
       "threshold": 0.25,
-      "validation_dice": 0.6426097750663757
+      "validation_dice": 0.6534883379936218
     },
     {
       "threshold": 0.30000001192092896,
-      "validation_dice": 0.6434378027915955
+      "validation_dice": 0.6543486714363098
     },
     {
       "threshold": 0.3499999940395355,
-      "validation_dice": 0.644415020942688
+      "validation_dice": 0.6548835039138794
     },
     {
       "threshold": 0.4000000059604645,
-      "validation_dice": 0.6450414061546326
+      "validation_dice": 0.6552698016166687
     },
     {
       "threshold": 0.44999998807907104,
-      "validation_dice": 0.6455463767051697
+      "validation_dice": 0.6553913950920105
     },
     {
       "threshold": 0.5,
-      "validation_dice": 0.6456997990608215
+      "validation_dice": 0.6552346348762512
     },
     {
       "threshold": 0.550000011920929,
-      "validation_dice": 0.6456623077392578
+      "validation_dice": 0.6550468802452087
     },
     {
       "threshold": 0.6000000238418579,
-      "validation_dice": 0.6458439826965332
+      "validation_dice": 0.6547309160232544
     },
     {
       "threshold": 0.6499999761581421,
-      "validation_dice": 0.6458704471588135
+      "validation_dice": 0.6546063423156738
     },
     {
       "threshold": 0.699999988079071,
-      "validation_dice": 0.6461812853813171
+      "validation_dice": 0.6540768146514893
     },
     {
       "threshold": 0.75,
-      "validation_dice": 0.6456578969955444
+      "validation_dice": 0.653105616569519
     },
     {
       "threshold": 0.800000011920929,
-      "validation_dice": 0.6447708606719971
+      "validation_dice": 0.6523381471633911
     },
     {
       "threshold": 0.8500000238418579,
-      "validation_dice": 0.6443192958831787
+      "validation_dice": 0.6501547694206238
     },
     {
       "threshold": 0.8999999761581421,
-      "validation_dice": 0.6421995759010315
+      "validation_dice": 0.6468823552131653
     }
   ]
 }
