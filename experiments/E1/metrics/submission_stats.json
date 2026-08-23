@@ -1,0 +1,40 @@
+{
+  "path": "/Users/fp/GitHub Repos/MachineLearning-Project/submission.csv",
+  "images": 180,
+  "filaments": 1179,
+  "filaments_per_image": 6.55,
+  "images_without_filaments": 3,
+  "seconds": 616.3548201250087,
+  "gpu_memory_gb": 4.9568939208984375,
+  "recipe": {
+    "experiment_id": "E1",
+    "ensemble": "weighted mean of probability maps at native 2048, one thresholding",
+    "members": [
+      {
+        "experiment_id": "08",
+        "model": "resnet18",
+        "checkpoint": "experiments/08/checkpoints/best_model.pt",
+        "image_size": 1536,
+        "tile": null,
+        "weight": 0.5
+      },
+      {
+        "experiment_id": "U2",
+        "model": "resnet34",
+        "checkpoint": "experiments/U2/checkpoints/best_pq_model.pt",
+        "image_size": 2048,
+        "tile": null,
+        "weight": 0.5
+      }
+    ],
+    "selection_objective": "pq",
+    "threshold": 0.61,
+    "close": 0,
+    "min_size": 320,
+    "gate": 0.95,
+    "tta": true,
+    "validation_dice": 0.6691,
+    "validation_pq": 0.4354,
+    "provenance": "Operating point searched on the weighted average of the two members' validation maps (coarse + fine threshold pass, gates 0.95/0.97, min size 256-448). Cross-selection against U2 alone: +0.0032 / +0.0048 on the held-out halves. Singles: exp08 0.4264, U2 0.4282."
+  }
+}

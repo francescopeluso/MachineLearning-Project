@@ -1,0 +1,16 @@
+{
+  "experiment_id": "U2",
+  "model": "resnet34",
+  "checkpoint": "experiments/U2/checkpoints/best_pq_model.pt",
+  "checkpoint_epoch": 17,
+  "selection_objective": "pq",
+  "image_size": 2048,
+  "tile": null,
+  "threshold": 0.8,
+  "close": 0,
+  "min_size": 256,
+  "gate": 0.95,
+  "tta": true,
+  "validation_dice": 0.6669509149398167,
+  "validation_pq": 0.42815307022237586
+}

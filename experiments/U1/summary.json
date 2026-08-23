@@ -1,0 +1,30 @@
+{
+  "experiment_id": "U1",
+  "training": {
+    "best_epoch": 17,
+    "best_validation_dice": 0.6846319894386685,
+    "best_pq_epoch": 18,
+    "best_validation_cheap_pq": 0.3567167146648149,
+    "epochs_completed": 20,
+    "seconds_per_epoch": 118.6651547393,
+    "total_minutes": 39.59124994726667,
+    "peak_training_memory_gb": 9.196148872375488
+  },
+  "operating_point": {
+    "experiment_id": "U1",
+    "model": "resnet18",
+    "checkpoint": "experiments/U1/checkpoints/best_pq_model.pt",
+    "checkpoint_epoch": 18,
+    "selection_objective": "pq",
+    "image_size": 2048,
+    "tile": null,
+    "threshold": 0.55,
+    "close": 0,
+    "min_size": 320,
+    "gate": 0.95,
+    "tta": true,
+    "validation_dice": 0.6690911677150303,
+    "validation_pq": 0.4210688278588862
+  },
+  "test_metrics": null
+}
