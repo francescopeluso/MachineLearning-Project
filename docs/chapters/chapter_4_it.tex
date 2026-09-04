@@ -1,83 +1,96 @@
-\section{Dalle probabilità alla submission}
-\label{sec:operating}
+\section{Modello e addestramento}
+\label{sec:method}
 
-L'addestramento produce una mappa di probabilità; quattro decisioni la trasformano
-nella maschera che viene valutata, e insieme valgono più PQ di qualunque singola
-modifica all'addestramento. Tutte si scelgono solo in validazione, e
-\emph{congiuntamente}, perché interagiscono -- regolare prima la soglia e poi i filtri
-blocca su un punto peggiore (sull'Esperimento~5, $0{,}389$ in sequenza contro $0{,}401$
-congiunto).
+\subsection{Architettura}
 
-\begin{itemize}\itemsep0pt
-    \item la \textbf{soglia} che binarizza la mappa di probabilità;
-    \item la \textbf{chiusura morfologica}, che ricongiunge un filamento spezzato in
-          due dalla rete, convertendo due FP e un FN in un TP;
-    \item una \textbf{dimensione minima di componente}, che elimina le componenti
-          spurie minuscole della Sezione~\ref{sec:experiments}, ognuna delle quali
-          costa un falso positivo intero;
-    \item un \textbf{gate di confidenza}: una componente sopravvive solo se la sua
-          probabilità supera il gate da qualche parte. La soglia da sola fa due
-          mestieri insieme -- decidere \emph{quali} blob esistono e \emph{quanto sono
-          spessi} -- quindi alzarla per uccidere i blob deboli assottiglia anche ogni
-          filamento vero. Il gate si prende la decisione di esistenza e lascia i
-          contorni dove li ha disegnati la soglia.
-\end{itemize}
+Il modello è la U-Net della Sezione~\ref{sec:background} con un \textbf{encoder
+ResNet18 pre-addestrato su ImageNet} (Figura~\ref{fig:architectures}): con meno di
+500 osservazioni di training, imparare da zero bordi e texture spreca il budget di
+dati. La testa di classificazione viene scartata e i quattro blocchi convoluzionali
+alimentano il decoder U-Net attraverso le skip connection. Una riscrittura
+algebrica una tantum ripiega lo stem RGB e la normalizzazione ImageNet in una
+convoluzione a canale singolo esattamente equivalente, così le immagini in scala di
+grigi entrano direttamente a un terzo della banda d'ingresso. L'architettura resta
+poi fissa per tutto lo studio: una variabile per esperimento è ciò che rende
+significativi i confronti.
 
-La test-time augmentation sulle otto simmetrie del quadrato media otto mappe di
-probabilità e resta dietro un flag; la soglia va poi ri-selezionata sulle mappe
-mediate, altrimenti la TTA sembra dannosa quando non lo è.
+Tre alternative sono state considerate e scartate per ragioni dichiarate e
+verificabili. Le \textbf{architetture di instance segmentation} come Mask
+R-CNN~\cite{maskrcnn} ricostruiscono ogni maschera da una griglia $28 \times 28$
+dentro un box allineato agli assi -- un sovracampionamento di $\sim\!25\times$ per
+oggetti la cui proprietà distintiva è essere larghi pochi pixel e lunghi centinaia
+-- e filamenti allungati e diagonali producono box sovrapposti e quasi tutti di
+sfondo, il regime peggiore per l'anchor matching. L'affermazione è stata poi
+verificata empiricamente invece di restare sulla carta: un detector
+YOLOv8x-seg~\cite{yolo} addestrato sullo stesso split raggiunge un punteggio a
+istanze competitivo (PQ $0{,}426$) ma un Dice nettamente peggiore ($0{,}632$ contro
+$0{,}68$), confermando la scelta per il punteggio della traccia. \textbf{Encoder più
+grandi e transformer}: in ogni capacità e risoluzione provata la qualità delle
+maschere accoppiate non si è mai mossa (Sezione~\ref{sec:error}), quindi la capacità
+non è il vincolo attivo, mentre il budget di dati sconsiglia modelli più affamati.
+Le \textbf{pipeline non neurali} (sogliatura più morfologia): il contrasto H-alpha
+varia fortemente tra osservazioni, e una regola fotometrica globale non può
+separare i filamenti da macchie solari e oscuramento al bordo.
 
-\subsection{Misurare ciò che misura la leaderboard, dove lo misura}
-\label{sec:native}
+\begin{figure}[t]
+    \centering
+    \begin{minipage}[c]{0.46\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
+    \end{minipage}\hfill
+    \begin{minipage}[c]{0.50\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
+    \end{minipage}
+    \caption{A sinistra: l'encoder--decoder U-Net con le skip connection. A destra:
+    l'encoder ResNet18 che sostituisce quello da zero; la testa di classificazione
+    viene scartata e i quattro blocchi convoluzionali alimentano il decoder U-Net.}
+    \label{fig:architectures}
+\end{figure}
 
-Perché un numero di validazione significhi qualcosa, due cose devono essere giuste.
-\textbf{Cosa}: la PQ ufficiale della Sezione~\ref{sec:metrics}, reimplementata e
-verificata a $3\times10^{-8}$ contro il codice degli organizzatori. Sull'unione di due
-o tre annotatori un'immagine porta circa undici filamenti contro meno di sette per
-ciascun singolo annotatore, quindi un modello regolato sulla definizione sbagliata
-sovra-predice sistematicamente. \textbf{Dove}: la submission si scrive a $2048^2$, ma i
-primi operating point erano scelti alla risoluzione di addestramento -- un disallineamento
-di protocollo, visto che una dimensione minima regolata a $1024$ significa altro a
-$2048$ e il numero di componenti connesse non è affatto preservato dal
-ridimensionamento di una maschera. Il rimedio è ingrandire la mappa di
-\emph{probabilità} a risoluzione nativa e solo lì sogliare, post-processare e
-valutare. Misurato sull'Esperimento~5, selezionare a risoluzione nativa contro la
-metrica ufficiale vale $+0{,}020$ Dice e $+0{,}006$ PQ rispetto alla ricetta che
-sarebbe altrimenti partita (Tabella~\ref{tab:native}) -- gratis, senza riaddestrare.
+\subsection{Loss, ottimizzazione e implementazione}
+
+La loss è una combinazione a pesi uguali di binary cross-entropy e soft
+Dice~\cite{vnet}: il Dice è immune al tasso di positivi dello $0{,}4\%$ ma non dice
+nulla sulla confidenza, mentre la BCE mantiene le probabilità \emph{calibrate},
+ciò che rende ben condizionata la ricerca della soglia della
+Sezione~\ref{sec:operating} -- l'esperimento 3 mostra cosa succede quando quella
+calibrazione si perde. L'augmentation usa le otto simmetrie del quadrato, che
+preservano l'etichetta perché i filamenti non hanno orientamento canonico, più
+jitter fotometrico per il contrasto H-alpha variabile. L'ottimizzazione è
+AdamW~\cite{adamw}, batch size 2, al più 20 epoche, con early stopping sul Dice di
+validazione. Il checkpoint si sceglie sul \textbf{Dice}, non sulla PQ: la PQ dipende
+fortemente da soglia e post-processing, regolati dopo sullo stesso validation set,
+quindi selezionare i pesi con essa ottimizzerebbe due quantità accoppiate in un
+colpo solo.
+
+Due scelte implementative rendono sostenibile lo studio. Immagini e maschere sono
+decodificate \emph{una sola volta} in cache uint8 mappate in memoria -- tutta la
+ground truth a $1024^2$ occupa 150~MB invece di 1,2~GB -- così un'epoca legge solo
+byte invece di decodificare JPEG e rasterizzare poligoni. L'addestramento gira in
+precisione mista con gradient checkpointing alle risoluzioni più alte, e il picco
+di memoria GPU è \emph{misurato} allo step che davvero raggiunge il massimo, mai
+stimato dal numero di parametri.
 
 \begin{table}[ht]
     \centering
-    \caption{Esperimento 5, stesso checkpoint, quattro modi di scegliere l'operating
-    point, tutti valutati con la metrica ufficiale a $2048^2$.}
-    \label{tab:native}
-    \small\begin{tabular}{lccrrrr}
+    \caption{Costo misurato della pipeline consegnata. Addestramento e ricerca
+    dell'operating point girano su GPU Colab; l'inferenza è stata eseguita anche
+    su GPU di un portatile. Entrambi i notebook girano senza modifiche in Colab e
+    Kaggle, come richiede la traccia.}
+    \label{tab:cost}
+    \small\begin{tabular}{lr}
         \toprule
-        Protocollo di selezione & $t$ & chiusura / dim.\ min. & Dice & PQ & SQ & RQ \\
+        Passo & Costo \\
         \midrule
-        a $1024$ su PQ                & 0,65 & 1 / 512 & 0,6462 & 0,3901 & 0,660 & 0,591 \\
-        a $1024$ su Dice+PQ           & 0,90 & 1 / 256 & 0,6590 & 0,3964 & 0,662 & 0,599 \\
-        a $2048$, metrica interna     & 0,70 & 2 / 256 & 0,6653 & 0,3965 & 0,660 & 0,601 \\
-        a $2048$, metrica ufficiale   & 0,75 & 2 / 256 & \textbf{0,6665} & \textbf{0,4022} & 0,662 & 0,608 \\
+        Addestramento, un'epoca (601 finestre da $1536^2$)      & 105 s \\
+        Addestramento completo (19 epoche, early stopping)      & 33 min \\
+        Ricerca dell'operating point (1437 combinazioni a $2048^2$) & 10 min \\
+        Inferenza sulle 180 immagini di test, con TTA D4        & 14 min \\
+        \midrule
+        Picco di memoria GPU in training (soglia bonus 5~GB)    & \textbf{3,04 GB} \\
+        Picco di memoria GPU in inferenza (soglia bonus 4~GB)   & \textbf{2,50 GB} \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-Un'ultima rifinitura è arrivata tardi e non è costata nulla: la leaderboard riporta la
-PQ e nient'altro, ma la ricetta era storicamente congelata sull'obiettivo
-\emph{bilanciato} $\mathrm{Dice} + \mathrm{PQ}$. Ri-selezionare il punto del modello
-finale sulla PQ pura, con un secondo passaggio di soglie più fine attorno all'ottimo
-grossolano (Figura~\ref{fig:threshold-search}), lo sposta da $0{,}4194$ a
-$\mathbf{0{,}4264}$ (soglia $0{,}48$, chiusura $1$, dimensione minima $384$, gate
-$0{,}97$). La cross-selection -- scegliere il punto su metà dei file di validazione e
-valutarlo sull'altra metà -- quantifica il costo di overfitting della griglia fine in
-appena $0{,}0024$, con le due metà che selezionano indipendentemente la stessa soglia e
-lo stesso gate: la rifinitura è reale, non rumore di griglia.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.62\linewidth]{../experiments/08/plots/threshold_search.png}
-    \caption{Dice e PQ di validazione al variare della soglia per il modello finale
-    (senza post-processing). Le due metriche hanno massimi diversi; la ricetta spedita
-    è selezionata sulla PQ, congiuntamente a chiusura, dimensione minima e gate.}
-    \label{fig:threshold-search}
-\end{figure}

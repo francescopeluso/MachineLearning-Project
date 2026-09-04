@@ -1,0 +1,33 @@
+\section{Conclusions and future work}
+\label{sec:conclusions}
+
+The delivered model is experiment 13 -- a ResNet18-U-Net trained on random $1536^2$
+windows of the native $2048^2$ frame -- with its inference configuration, selected
+on the validation set, frozen on the assignment's score: validation \textbf{Dice
+0.6815}, the highest of the study, PQ 0.393 at the same point, training at
+\textbf{3.04~GB} and inference at \textbf{2.50~GB}, inside the optional GPU budget
+on both counts. The submitted training and test notebooks reproduce the
+configuration and the submission end to end.
+
+Three lessons generalise beyond this dataset. \textbf{Measure what the score
+measures, where it measures it}: selecting the operating point at native
+resolution, against the official metric definition, and on the objective actually
+graded was worth more than most training changes -- all free. \textbf{Pick the
+metric that sees the failure mode}: Dice passed pairwise annotator agreement at the
+second experiment and then stayed nearly flat; every real improvement was visible
+only in PQ's recognition term, and an evaluation restricted to a single metric
+would have declared the project finished ten experiments early. \textbf{A falsified
+hypothesis is not a wasted run}: over twenty ideas were measured and rejected, and
+each rejection redirected the effort -- experiment 3's failure exposed the
+resolution problem, the failure of every post-hoc mechanism showed the residual
+error lives in the model's probability support, and the cross-selection protocol
+separated real gains from selection noise at the $\pm 0.005$ level.
+
+The recognition gap that remains -- recall of small, faint filaments against
+incomplete annotations -- is, on the evidence gathered here, a training-data
+problem more than an architecture problem. Two directions follow directly: a
+cross-validated protocol in which every observation trains a model, so that the
+operating point is selected on $6.7\times$ more annotator entries and gains below
+the current noise floor become measurable; and pseudo-labelling of the filaments
+the model finds and no annotator marked, which the organisers have confirmed do
+exist in the data.

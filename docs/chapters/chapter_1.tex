@@ -1,81 +1,39 @@
-\section{The task, the data and the metrics}
-\label{sec:framing}
+\section{Introduction}
+\label{sec:intro}
 
-Solar filaments are ribbons of cooler plasma suspended over the solar disk, visible as
-dark, elongated structures in H-alpha images. The task is binary segmentation with an
-instance twist: given a $2048 \times 2048$ observation, predict which pixels belong to
-a filament, split the mask into one connected component per filament, and submit each
-component as a COCO run-length encoding.
+This report describes how we designed, trained and selected the model we deliver
+for the segmentation of solar filaments in H-alpha images, and also which
+hypotheses we tried and had to reject along the way.
 
-\subsection{What the dataset looks like}
-\label{sec:dataset}
+Two facts shaped most of our decisions. First, \textbf{the annotations are subjective}:
+each observation was traced by up to three experts who agree with one another only
+to a Dice of $0.62$, so part of the error we measure is expert disagreement rather
+than a modelling error. Second, \textbf{two different scores are in play}: the project work
+assignment is evaluated on the Mean Dice, while the Kaggle challenge ranks its
+leaderboard by Panoptic Quality (PQ). The delivered configuration is optimised for
+the former; the latter is studied separately, in Section~\ref{sec:kaggle}.
 
-The training set contains \textbf{707 observations} from the six stations of the GONG
-network (Big Bear, Cerro Tololo, Learmonth, Mauna Loa, El Teide, Udaipur), taken
-between 2011 and 2022 with a strong skew towards the 2011--2015 solar maximum. The
-annotations come from the MAGFiLO catalogue and carry a structure that shaped the whole
-project: each of the \textbf{1154 annotation records} is \emph{one annotator's view} of
-one observation. 411 files were annotated by a single expert, 145 by two and 151 by
-three, and the annotators genuinely disagree -- the mean Dice between two annotators of
-the \emph{same} image is $0.62$ (median $0.65$).
+The main contributions are:
 
-The 8199 annotated filaments are small and thin: the median filament covers about
-1230~pixels at native resolution (interquartile range 670--2430, 15\% below 500), and
-all filaments together cover only $\approx 0.4\%$ of the pixels. Three consequences
-drive the design. The extreme class imbalance rules out a plain cross-entropy loss;
-structures a few pixels wide are destroyed by aggressive downscaling, which will make
-\emph{resolution} the most productive variable of the study; and with only 494 training
-observations (the training set is explicitly not extendable), transfer learning and
-augmentation are the only remaining levers.
+\begin{itemize}\itemsep0pt
+    \item a U-Net with a pre-trained ResNet18 encoder reaching \textbf{validation
+          Dice 0.6815}, above inter-annotator agreement, inside the optional GPU
+          budget (3.04~GB in training, 2.50~GB at inference);
+    \item an evaluation pipeline that re-implements the challenge's own PQ and is
+          verified against the organisers' code to $3\times10^{-8}$, so every
+          validation number is directly comparable with the leaderboard;
+    \item a post-processing stage whose four hyperparameters are grid-searched
+          jointly on the validation set -- worth more than most training changes
+          and costing no training time at all;
+    \item a falsification record: fifteen training runs and a dozen post-hoc
+          mechanisms measured and, for the most part, rejected, together with a
+          measured noise floor below which a validation gain cannot be believed.
+\end{itemize}
 
-\subsection{Metrics: IoU, Dice, and Panoptic Quality}
-\label{sec:metrics}
-
-Two masks $P$ (prediction) and $G$ (ground truth) can be compared by their
-\textbf{Intersection over Union} or by the closely related \textbf{Dice coefficient}:
-%
-\begin{equation}
-\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
-\qquad
-\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|}.
-\end{equation}
-%
-Both are pixel-level measures. Dice is what the course grades; the Kaggle submission,
-however, asks for one row per \emph{filament}, and the leaderboard reflects
-\textbf{Panoptic Quality}. Predicted and annotated instances are matched when their
-IoU exceeds $0.5$ (matched pairs are true positives, unmatched predictions false
-positives, unmatched annotations false negatives), and
-%
-\begin{equation}
-\mathrm{PQ} = \frac{\sum_{(p,g) \in \mathrm{TP}} \mathrm{IoU}(p,g)}
-                   {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}
-            = \underbrace{\frac{\sum \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
-              \times
-              \underbrace{\frac{|\mathrm{TP}|}
-                               {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}}.
-\end{equation}
-%
-The factorisation matters: \emph{Segmentation Quality} measures how well matched
-instances overlap, \emph{Recognition Quality} measures how many instances are found at
-all. The gap between Dice and PQ is the whole story of this project -- a filament
-broken into three fragments, or a correct mask surrounded by twenty ten-pixel specks,
-moves Dice by a fraction of a percent and collapses RQ.
-
-The competition's own PQ, published in the organisers' self-evaluation notebook,
-differs from the textbook definition in three ways that all change what a good
-prediction looks like: ground truth is \emph{one instance per annotation}, not
-connected components of the union of all annotators' polygons; \emph{each annotator is
-a separate evaluation entry}, so one prediction is scored two or three times against
-experts who disagree; and TP/FP/FN accumulate \emph{globally} over the split rather
-than per image. The pipeline re-implements exactly this definition and verifies it
-against the reference code (agreement to $3 \times 10^{-8}$), so every validation
-number in this report is directly comparable with the leaderboard.
-
-\subsection{How good is good enough}
-
-The inter-annotator Dice of $0.62$ is a practical ceiling: past it, a model is not
-segmenting better, it is fitting one expert's notion of where a filament ends. The
-number reframes the problem -- from the second experiment onwards the model is already
-at that ceiling on Dice while PQ sits around $0.25$, so the headroom is entirely in how
-the mask is \emph{organised into instances}. Every hypothesis that follows is built on
-that observation.
+Section~\ref{sec:background} recalls the ingredients and the metrics,
+Section~\ref{sec:data} the data and the evaluation protocol,
+Section~\ref{sec:method} the model and its training,
+Section~\ref{sec:design} how the experiments were planned,
+Section~\ref{sec:results} what they produced,
+Section~\ref{sec:error} where the residual error lives, and
+Section~\ref{sec:conclusions} concludes.

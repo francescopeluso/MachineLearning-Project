@@ -1,46 +1,129 @@
-\section{Risultati, conclusioni e prossimi passi}
-\label{sec:next}
+\section{Risultati sperimentali}
+\label{sec:results}
 
-Il modello consegnato è l'Esperimento~8 -- ResNet18-U-Net a $1536^2$, test-time
-augmentation D4 -- con l'operating point ri-selezionato sulla PQ pura: Dice di
-validazione $0{,}668$, PQ $\mathbf{0{,}4264}$ ($t=0{,}48$, chiusura 1, dimensione
-minima 384, gate di confidenza $0{,}97$). La submission è pienamente riproducibile: il
-notebook di training rideriva esattamente questa ricetta dal checkpoint congelato, e il
-notebook di inferenza rigenera una \texttt{submission.csv} identica byte per byte.
+\subsection{Esperimenti principali}
 
-Tre lezioni valgono oltre questo dataset. \textbf{Misurare ciò che il punteggio misura,
-dove lo misura}: selezionare l'operating point a risoluzione nativa, contro la
-definizione di PQ degli organizzatori e sull'obiettivo che la leaderboard riporta
-davvero è valso $+0{,}020$ Dice e $+0{,}031$ PQ complessivi -- tutto gratis, senza
-riaddestrare. \textbf{Scegliere la metrica che vede il modo di fallire}: il Dice ha
-superato il tetto inter-annotatore all'Esperimento~2 ed è rimasto piatto; ogni
-miglioramento reale successivo era visibile solo nel termine di riconoscimento della
-PQ. Una valutazione limitata alla metrica del corso avrebbe dichiarato il progetto
-concluso dieci esperimenti prima. \textbf{Un'ipotesi falsificata non è un run
-sprecato}: dieci idee sono state misurate e respinte in questo studio, e ogni rigetto
-ha ridiretto lo sforzo -- il fallimento dell'Esperimento~3 ha esposto il problema della
-risoluzione, e il fallimento di ogni meccanismo post-hoc sull'estensione
-(Sezione~\ref{sec:falsified}) è precisamente ciò che dimostra che l'errore residuo va
-attaccato in addestramento.
+Sono stati eseguiti quindici run; i sei che hanno cambiato la rotta del progetto
+sono nella Tabella~\ref{tab:experiments}.
 
-Uno dei seguiti preparati è già stato eseguito e falsificato: addestrare su finestre
-casuali $1536^2$ del frame nativo $2048^2$ (Esperimento~13) ha perso $0{,}020$ PQ e
-spinto il recall sotto i 500~pixel giù a $0{,}31$ -- l'addestramento a finestre
-rinuncia al contesto dell'intero disco senza comprare i filamenti piccoli, e chiude la
-strada della risoluzione ($+0{,}136$, $+0{,}009$, $-0{,}020$ nei tre salti di scala).
-La loss bilanciata per istanza (Esperimento~14) è stata poi falsificata come termine
-\emph{dominante}: con la Dice globale ridimensionata, il controllo dei falsi positivi
-è collassato e il recall delle istanze piccole è sceso a $0{,}09$ -- ma quello delle
-istanze da 2000--5000 pixel è salito a $0{,}76$, quindi il termine merita un retest a
-peso ridotto, stesso arco degli Esperimenti~3 e~9. Il peso sulla classe positiva (Esperimento~15) ha
-poi prodotto il fallimento più istruttivo della campagna: la sotto-segmentazione è
-sparita (rapporto d'area dei near miss da $0{,}62$ a $0{,}95$), i pure miss sono
-calati di un quinto e il Dice ha segnato il record del progetto ($0{,}677$) -- ma le
-predizioni più grasse hanno gonfiato in parallelo i falsi positivi, chiudendo
-$0{,}007$ sotto il campione. A chiudere la campagna è un fatto statistico: su 169 voci
-di validazione, ogni guadagno sotto $\approx +0{,}005$ è indistinguibile dal rumore di
-selezione. Il passo preparato che attacca esattamente questo è la
-\emph{cross-validation a cinque fold}: ogni osservazione addestra un modello, e le
-predizioni out-of-fold sostengono una ricerca dell'operating point su $6{,}7\times$
-più voci di annotazione -- trasformando i guadagni che questa campagna poteva solo
-sospettare in guadagni che si possono misurare.
+\begin{table}[ht]
+    \centering
+    \caption{Gli esperimenti principali. Dice e PQ all'operating point di ciascun
+    run, metrica ufficiale a $2048^2$ nativo; i primi tre precedono quel protocollo
+    e sono riportati a soglia $0{,}5$ (contrassegnati *).}
+    \label{tab:experiments}
+    \small\begin{tabular}{clrrl}
+        \toprule
+        Esp. & Una variabile & Dice & PQ & Esito \\
+        \midrule
+        1 & U-Net da zero, $512^2$                 & 0,6415* & --      & baseline \\
+        2 & encoder ResNet18 ImageNet              & 0,6552* & 0,2505* & calibrazione, +1 pt Dice \\
+        3 & loss topologica (Tversky + clDice)     & 0,4937* & 0,0618* & \textbf{falsificato}, istruttivo \\
+        5 & risoluzione $512 \to 1024$             & 0,6665  & 0,4022  & il guadagno singolo maggiore \\
+        8 & $\to 1536$, TTA D4, gate di confidenza & 0,6729  & \textbf{0,4264} & miglior PQ (singolo) \\
+        13 & 2048 nativo, finestre casuali 1536    & \textbf{0,6815} & 0,3930 & miglior Dice -- \textbf{consegnato} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\textbf{Baseline e transfer (1--2).} La U-Net da zero arriva a Dice 0,6415
+all'ultima epoca, ancora in underfitting, con la soglia migliore al bordo della
+griglia di ricerca: probabilità mal calibrate che puntano all'encoder. L'encoder
+pre-addestrato aggiunge un punto di Dice e, cosa più utile, appiattisce la curva
+soglia--Dice: per una configurazione di inferenza da congelare prima di vedere il
+test set, la calibrazione vale più del punto.
+
+\textbf{Il fallimento istruttivo (3).} Sostituire metà della loss con Tversky
+orientata al recall~\cite{tversky} più clDice~\cite{cldice} fa crollare la
+validazione a Dice 0,49 e PQ 0,06 mentre la training loss scende: il modello
+ottimizza con successo la cosa sbagliata. L'autopsia conta più del numero: a
+$512^2$ molti filamenti sono larghi uno o due pixel, quindi lo scheletro soft che
+clDice richiede è rumore proprio sulle strutture che doveva proteggere. Un problema
+di \emph{scala} travestito da problema di loss, e la ragione per cui esiste
+l'esperimento 5.
+
+\textbf{Risoluzione (5, 8).} Non cambia nulla tranne la dimensione dell'input,
+$512 \to 1024$: il Dice guadagna un punto mentre la PQ salta del $+28\%$ relativo.
+L'asimmetria è la scoperta: la risoluzione cambia poco quanta parte del disco è
+coperta correttamente, e moltissimo quanti filamenti esistono come oggetti
+riconoscibili. Proseguendo a $1536$ con la media sulle otto simmetrie del quadrato
+e un gate di confidenza si ottiene il miglior punteggio a istanze dello studio.
+
+\textbf{Pixel nativi (13).} Addestrare su finestre casuali $1536^2$ del frame
+$2048^2$ intatto rimuove l'ultimo ridimensionamento dalla pipeline. \emph{Perde}
+sul riconoscimento -- le finestre rinunciano al contesto dell'intero disco -- e
+\emph{vince} sulla qualità delle maschere: Dice \textbf{0,6815}, il massimo dello
+studio, con training a 3,04~GB e inferenza a 2,50~GB, l'unica configurazione dentro
+il bonus memoria su entrambi i fronti (Figura~\ref{fig:curves}).
+
+\textbf{Misurati e respinti.} Altri nove run a variabile singola e una dozzina di
+meccanismi post-hoc sono stati falsificati, ognuno col suo numero: scale jitter
+($-0{,}019$ PQ), una cascata detect-then-refine ($-0{,}025$), target di consenso
+soft ($-0{,}033$), clDice ritestata a $1536$ dove la sua premessa era finalmente
+valida ($-0{,}013$), il Dice bilanciato per istanza come termine dominante (il
+controllo dei falsi positivi è collassato), un peso sulla classe positiva nella BCE
+(ha curato la sotto-segmentazione misurata pagandola in allucinazioni), soglie e
+dilatazioni per componente, e tre varianti di ricucitura post-hoc dei filamenti i
+cui guadagni aggregati sono morti in cross-selection.
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.72\linewidth]{../experiments/13/plots/training_curves.png}
+    \caption{Il modello consegnato (esperimento 13) in addestramento: loss e
+    metriche a soglia 0,5. L'operating point viene scelto dopo.}
+    \label{fig:curves}
+\end{figure}
+
+\subsection{Post-processing e operating point}
+\label{sec:operating}
+
+La rete emette una probabilità per pixel. Trasformare quella mappa nelle istanze
+finali richiede quattro \emph{iper-parametri di post-processing} -- insieme formano
+l'\emph{operating point}, selezionato con una ricerca a griglia congiunta sul
+validation set (mai sul test set) perché i quattro interagiscono:
+
+\begin{itemize}\itemsep0pt
+    \item \textbf{soglia} ($0{,}50$ nella configurazione consegnata): un pixel con
+          probabilità superiore diventa filamento, sotto diventa background;
+    \item \textbf{chiusura morfologica} ($1$ iterazione): riempie le discontinuità
+          di un pixel, così un filamento spezzato in due dalla rete torna una
+          componente sola -- due falsi positivi e un falso negativo diventano un
+          unico vero positivo;
+    \item \textbf{dimensione minima di componente} ($384$ pixel a $2048^2$): una
+          componente connessa più piccola viene scartata per intero, perché ogni
+          piccolo blob spurio costa un falso positivo pieno in PQ aggiungendo quasi
+          nulla al Dice;
+    \item \textbf{gate di confidenza} ($0{,}90$): una componente sopravvive solo se
+          almeno un suo pixel supera questa probabilità. La soglia da sola svolge
+          due ruoli insieme -- decidere \emph{quali} componenti esistono e la loro
+          \emph{estensione} -- quindi alzarla per eliminare i blob deboli
+          assottiglia anche ogni filamento vero; il gate si prende la decisione di
+          esistenza e lascia le forme esattamente come le ha disegnate la soglia.
+\end{itemize}
+
+\begin{wrapfigure}{r}{0.42\textwidth}
+    \vspace{-1.2em}
+    \centering
+    \includegraphics[width=0.40\textwidth]{../experiments/13/plots/threshold_search.png}
+    \caption{Dice e PQ di validazione al variare della soglia per il modello
+    consegnato, senza post-processing: le due metriche hanno massimi diversi.}
+    \label{fig:threshold}
+    \vspace{-1em}
+\end{wrapfigure}
+
+Tutto viene valutato a $2048^2$ nativo, perché è lì che si scrive la submission:
+una dimensione minima regolata alla risoluzione di addestramento significa altro a
+scala nativa, e il numero di componenti connesse non è preservato dal
+ridimensionamento di una maschera. Misurato quando questo protocollo fu introdotto,
+selezionare a risoluzione nativa contro la definizione ufficiale valse $+0{,}020$
+Dice e $+0{,}006$ PQ rispetto alla configurazione che sarebbe altrimenti partita --
+gratis, senza riaddestrare.
+
+La stessa griglia di ricerca produce un punto per obiettivo. La
+\textbf{configurazione consegnata} è congelata sul Dice, il punteggio della
+traccia: soglia $0{,}50$, chiusura $1$, dimensione minima $384$, gate $0{,}90$, per
+\textbf{Dice 0,6815} (PQ 0,393) in validazione. La cross-selection quantifica il
+costo della griglia più fine in $0{,}0024$, con entrambe le metà del validation set
+che selezionano la stessa soglia e lo stesso gate. Il punto PQ-ottimale dello
+stesso modello (0,407) e dello studio (0,4264, esperimento 8) restano registrati
+negli artefatti.

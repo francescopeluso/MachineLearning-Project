@@ -1,0 +1,51 @@
+{
+  "path": "/Users/fp/GitHub Repos/MachineLearning-Project/submission.csv",
+  "images": 180,
+  "filaments": 1364,
+  "filaments_per_image": 7.5777777777777775,
+  "images_without_filaments": 2,
+  "seconds": 753.9967349999934,
+  "gpu_memory_gb": 7.682830810546875,
+  "recipe": {
+    "experiment_id": "E2",
+    "ensemble": "weighted mean of probability maps at native 2048, one thresholding; detector instances appended on free pixels",
+    "members": [
+      {
+        "experiment_id": "08",
+        "model": "resnet18",
+        "checkpoint": "experiments/08/checkpoints/best_model.pt",
+        "image_size": 1536,
+        "tile": null,
+        "weight": 0.5
+      },
+      {
+        "experiment_id": "U2",
+        "model": "resnet34",
+        "checkpoint": "experiments/U2/checkpoints/best_pq_model.pt",
+        "image_size": 2048,
+        "tile": null,
+        "weight": 0.5
+      }
+    ],
+    "threshold": 0.61,
+    "close": 0,
+    "min_size": 320,
+    "gate": 0.95,
+    "tta": true,
+    "rescue": {
+      "detector": "yolov8x-seg.pt",
+      "checkpoint": "experiments/Y3/checkpoints/best_model.pt",
+      "image_size": 1792,
+      "conf": 0.35,
+      "iou": 0.0,
+      "max_det": 100,
+      "retina_masks": true,
+      "min_free_pixels": 5,
+      "min_free_fraction": 0.7
+    },
+    "selection_objective": "pq",
+    "validation_dice": 0.6603,
+    "validation_pq": 0.4414,
+    "provenance": "E1 (exp08+U2 map ensemble) plus Y3 detections on free pixels. Rescue tau searched on validation (0.30-0.70); cross-selection: both halves pick tau=0.35, transferred edge +0.0060/+0.0056 vs E1 alone. E1 0.4354 -> E2 0.4414."
+  }
+}

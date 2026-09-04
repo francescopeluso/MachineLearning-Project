@@ -1,0 +1,21 @@
+{
+  "path": "/Users/fp/GitHub Repos/MachineLearning-Project/submission.csv",
+  "images": 180,
+  "filaments": 1219,
+  "filaments_per_image": 6.772222222222222,
+  "images_without_filaments": 3,
+  "seconds": 86.17360216600355,
+  "gpu_memory_gb": NaN,
+  "recipe": {
+    "experiment_id": "Y3",
+    "detector": "yolov8x-seg.pt",
+    "checkpoint": "experiments/Y3/checkpoints/best_model.pt",
+    "image_size": 1792,
+    "conf": 0.3,
+    "iou": 0.0,
+    "max_det": 50,
+    "retina_masks": true,
+    "validation_dice": 0.6324082299234466,
+    "validation_pq": 0.4262556278544869
+  }
+}

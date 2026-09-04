@@ -1,80 +1,69 @@
-\section{Prima campagna: esperimenti 1--5}
-\label{sec:experiments}
-\label{sec:plan}
+\section{Dati e protocollo di valutazione}
+\label{sec:data}
 
-Gli esperimenti non sono una cronologia. Prima di addestrare qualunque cosa, le
-osservazioni della Sezione~\ref{sec:framing} sono state trasformate in una lista
-ordinata di ipotesi, ognuna delle quali cambia esattamente una cosa ed è falsificabile
-da un singolo numero: (1) un encoder--decoder standard trova già i filamenti
-principali; (2) con meno di 500 osservazioni il collo di bottiglia è l'encoder, quindi
-le feature ImageNet devono battere l'inizializzazione casuale; (3) il Dice è cieco alla
-frammentazione, quindi una loss consapevole della topologia deve alzare la PQ; (4)
-parte del residuo è il \emph{dominio} H-alpha, non la loss; (5) ciò che limita la PQ è
-la \emph{scala}. Le ipotesi 3 e 5 fanno previsioni opposte su dove vive l'errore, e
-solo una sopravvive al contatto coi dati.
+\subsection{Annotazioni e accordo tra annotatori}
 
-\textbf{Esperimenti 1--2, baseline e transfer learning.} La U-Net da zero arriva a
-Dice $0{,}6415$ all'ultima epoca, ancora in underfitting, con la soglia migliore al
-bordo della griglia -- segno di probabilità mal calibrate che punta all'encoder.
-Sostituirlo con la ResNet18 pre-addestrata porta il Dice a $0{,}6552$ all'epoca~8 e,
-cosa più utile, appiattisce la curva soglia--Dice: per una submission la cui soglia va
-congelata alla cieca, quella calibrazione vale più del punto di Dice.
-
-\textbf{Analisi dell'errore.} A $0{,}655$ il Dice è già a livello inter-annotatore,
-eppure la PQ è $0{,}2505$. Scomponendo: $\mathrm{SQ}=0{,}61$ (le istanze accoppiate si
-sovrappongono bene) ma $\mathrm{RQ}=0{,}38$. I falsi positivi sono uno sciame di
-componenti spurie minuscole (mediana 7~pixel), non frammentazione -- il $74\%$ dei
-filamenti sopra i 32~pixel è predetto come componente unica. Questa diagnosi è ciò che
-rende l'Esperimento~3 degno di essere eseguito, ed è ciò che il post-processing
-sfrutterà.
-
-\textbf{Esperimento 3, loss topologica -- falsificato.} Sostituire metà della loss con
-Tversky ($\beta = 0{,}7$) più clDice (un Dice tra scheletri soft) fa crollare il Dice
-di validazione a $0{,}4937$ e la PQ a $0{,}0618$, mentre la training loss scende: il
-modello ottimizza con successo la cosa sbagliata. Due lezioni. Il bias verso il recall
-di Tversky ingrossa tutto e distrugge la calibrazione appena comprata dal transfer
-learning; e a $512^2$ molti filamenti sono larghi uno o due pixel, quindi lo scheletro
-soft è rumore proprio sulle strutture che clDice doveva proteggere -- un problema di
-scala travestito da problema di loss, e il primo indizio che l'ipotesi 5 punta alla
-variabile giusta.
-
-\textbf{Esperimento 4, il dominio H-alpha.} Normalizzazione ImageNet (ripiegata nello
-stem), jitter fotometrico e cosine annealing: Dice $0{,}6591$, PQ $0{,}2656$, e la
-curva di validazione ora migliora fino all'ultima epoca invece di fermarsi all'ottava.
-
-\textbf{Esperimento 5, risoluzione -- il singolo guadagno più grande.} Non cambia nulla
-tranne la dimensione dell'input, $512 \to 1024$. Il Dice guadagna un punto ($0{,}6701$)
-mentre la PQ salta da $0{,}2656$ a $0{,}3397$, $+28\%$ relativo
-(Figura~\ref{fig:experiment-5}). L'asimmetria è il punto: raddoppiare la risoluzione
-cambia poco quanta parte del disco è coperta correttamente, e cambia moltissimo quanti
-filamenti esistono come oggetti riconoscibili. Quello che sembrava un problema di loss
-era un problema di campionamento.
-
-\begin{table}[ht]
+\begin{wrapfigure}{r}{0.31\textwidth}
+    \vspace{-1.4em}
     \centering
-    \caption{Prima campagna. Dice e PQ a soglia $0{,}5$ senza post-processing, così le
-    colonne sono direttamente confrontabili; l'operating point viene scelto dopo
-    (Sezione~\ref{sec:operating}).}
-    \label{tab:experiments}
-    \small\begin{tabular}{clrrr}
-        \toprule
-        Esp. & Ipotesi in verifica & Dice & PQ & Epoca migliore \\
-        \midrule
-        1 & U-Net da zero (baseline)                  & 0,6415 & --     & 20 \\
-        2 & Encoder ResNet18 ImageNet                 & 0,6552 & 0,2505 &  8 \\
-        3 & Loss Tversky + clDice                     & 0,4937 & 0,0618 & 13 \\
-        4 & Aug.\ fotometrica + normalizz.\ + cosine  & 0,6591 & 0,2656 & 18 \\
-        5 & Risoluzione $512 \rightarrow 1024$        & \textbf{0,6701} & \textbf{0,3397} & 15 \\
-        \midrule
-        \multicolumn{2}{l}{\emph{accordo inter-annotatore}} & \emph{0,62} & -- & \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+    \includegraphics[width=0.29\textwidth]{../experiments/13/plots/dataset_examples.png}
+    \caption{Tre osservazioni di training: immagine H-alpha (a sinistra) e maschera
+    binaria di un annotatore (a destra), con il numero di filamenti e la frazione
+    di pixel positivi.}
+    \label{fig:dataset}
+    \vspace{-1.2em}
+\end{wrapfigure}
 
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.72\linewidth]{../experiments/05/plots/training_curves.png}
-    \caption{Esperimento 5 a $1024 \times 1024$. La PQ di validazione, la curva più
-    bassa a destra, guadagna dal cambio di scala molto più del Dice.}
-    \label{fig:experiment-5}
-\end{figure}
+Il training set ha \textbf{707 osservazioni}. Le annotazioni sono COCO, con una
+proprietà strutturale che ha plasmato ogni decisione del progetto: ogni voce è
+\emph{la vista di un singolo annotatore} su un'osservazione, e la stessa immagine
+compare fino a tre volte con poligoni diversi (1154 record in totale, 8199
+filamenti annotati). Le maschere sono disegnate a mano da annotatori umani e quindi
+soggette a omissioni ed errori: non sono una ground truth perfetta. Gli annotatori
+sono genuinamente in disaccordo: sulle 296 osservazioni annotate da più di una
+persona, il Dice medio tra due annotatori della \emph{stessa} immagine è $0{,}62$.
+
+Quel numero misura il rumore delle etichette, non il massimo ottenibile da un
+modello. Il punteggio confronta la predizione con \emph{ogni} annotatore
+separatamente e poi media, quindi una predizione vicina al consenso paga solo i
+propri errori, mentre un annotatore usato come predittore paga anche le
+idiosincrasie del collega. Lo abbiamo misurato: la maschera di maggioranza degli
+annotatori -- un oracolo, costruito dalle stesse annotazioni contro cui lo
+valutiamo -- ottiene un Dice medio di $\mathbf{0{,}81}$ contro i singoli
+annotatori. Il tetto pratico sta lì, non a $0{,}62$: il modello consegnato arriva a
+$0{,}68$ (Sezione~\ref{sec:results}), sopra l'accordo tra due umani ma con ancora
+$\approx 0{,}13$ di margine, che la Sezione~\ref{sec:error} attribuisce al
+riconoscimento dei filamenti piccoli e non alla precisione dei contorni.
+
+I filamenti sono inoltre piccoli e rari (Figura~\ref{fig:dataset}): l'istanza
+mediana copre $\approx$1230 pixel e tutte insieme solo lo $0{,}4\%$ dell'immagine,
+il che esclude una cross-entropy pura e rende la risoluzione d'ingresso una
+variabile di prim'ordine.
+
+\subsection{Protocollo di split}
+
+Lo split è sui \textbf{nomi dei file, mai sui record di annotazione}: due
+annotatori di un'osservazione descrivono gli stessi pixel, e dividere per record
+farebbe trapelare pixel di validazione nel training gonfiando ogni punteggio. Il
+seed 22 divide le 707 osservazioni in tre blocchi da 494, 106 e 107, salvati in
+\texttt{splits/split\_seed22.csv}. Il terzo era un test interno, mai consultato per
+scegliere alcunché; dal settimo esperimento in poi abbiamo abbandonato lo split
+triplo e lo abbiamo incorporato nel training, dove 107 osservazioni valgono di più.
+Il protocollo effettivo, quello del modello consegnato, è quindi a due vie:
+\textbf{601 osservazioni di training e 106 di validazione}, con il validation set
+come unico strumento di selezione di iper-parametri, checkpoint e operating point.
+
+\subsection{La metrica ufficiale, reimplementata}
+
+La traccia del project work adotta il \textbf{Mean Dice} come punteggio di
+valutazione; la challenge Kaggle valuta la sua leaderboard con la \textbf{Panoptic
+Quality}, quindi teniamo traccia di entrambe. La PQ della challenge differisce dalla
+definizione da manuale della Sezione~\ref{sec:background} in tre punti che cambiano
+tutti l'aspetto di una buona predizione: la ground truth è un'istanza per
+annotazione e non le componenti connesse dell'unione dei poligoni di tutti gli
+annotatori; ogni annotatore è una voce di valutazione separata, quindi una stessa
+predizione viene valutata due o tre volte contro esperti in disaccordo tra loro; e
+TP, FP e FN si accumulano globalmente sull'intero split invece di essere mediati
+per immagine. La pipeline reimplementa esattamente quella definizione e la verifica
+contro il codice pubblicato dagli organizzatori, con un accordo di
+$3\times10^{-8}$.

@@ -1,77 +1,70 @@
-\section{First campaign: experiments 1--5}
-\label{sec:experiments}
-\label{sec:plan}
+\section{Data and evaluation protocol}
+\label{sec:data}
 
-The experiments are not a chronology. Before training anything, the observations of
-Section~\ref{sec:framing} were turned into an ordered list of hypotheses, each changing
-exactly one thing and each falsifiable by a single number: (1) a plain encoder--decoder
-already finds the main filaments; (2) with fewer than 500 observations the encoder is
-the bottleneck, so ImageNet features should beat random initialisation; (3) Dice is
-blind to fragmentation, so a topology-aware loss should raise PQ; (4) part of the
-residual is the H-alpha \emph{domain} rather than the loss; (5) what limits PQ is
-\emph{scale}. Hypotheses 3 and 5 make opposite predictions about where the error
-lives, and only one survives contact with the data.
+\subsection{Annotations and inter-annotator agreement}
 
-\textbf{Experiments 1--2, baseline and transfer learning.} The from-scratch U-Net
-reaches Dice $0.6415$ at the last epoch, still underfitted, with its best threshold at
-the edge of the grid -- a sign of poorly calibrated probabilities that points at the
-encoder. Replacing it with the pre-trained ResNet18 lifts Dice to $0.6552$ at epoch~8
-and, more usefully, flattens the threshold--Dice curve: for a submission whose
-threshold must be frozen blind, that calibration is worth more than the point of Dice.
-
-\textbf{Error analysis.} At $0.655$ Dice is already at inter-annotator level, yet PQ is
-$0.2505$. Decomposing it: $\mathrm{SQ}=0.61$ (matched instances overlap fine) but
-$\mathrm{RQ}=0.38$. The false positives are a swarm of tiny spurious components (median
-7~pixels), not fragmentation -- $74\%$ of ground-truth filaments over 32~pixels are
-predicted as a single component. This diagnosis is what makes Experiment~3 worth
-running, and what post-processing later exploits.
-
-\textbf{Experiment 3, a topology-aware loss -- falsified.} Replacing half of the loss
-with Tversky ($\beta = 0.7$) plus clDice (a Dice between soft skeletons) collapses
-validation Dice to $0.4937$ and PQ to $0.0618$, while the training loss decreases: the
-model optimises the wrong thing successfully. Two lessons. Tversky's recall bias
-thickens everything and destroys the calibration transfer learning had bought; and at
-$512^2$ many filaments are one or two pixels wide, so the soft skeleton is noise on
-exactly the structures clDice was meant to protect -- a scale problem wearing the
-costume of a loss problem, and the first hint that hypothesis 5 aims at the right
-variable.
-
-\textbf{Experiment 4, the H-alpha domain.} ImageNet normalisation (folded into the
-stem), photometric jitter and cosine annealing: Dice $0.6591$, PQ $0.2656$, and the
-validation curve now improves to the last epoch instead of stalling at~8.
-
-\textbf{Experiment 5, resolution -- the largest single gain.} Nothing changes except
-the input size, $512 \to 1024$. Dice gains one point ($0.6701$) while PQ jumps from
-$0.2656$ to $0.3397$, $+28\%$ relative (Figure~\ref{fig:experiment-5}). The asymmetry
-is the point: doubling the resolution barely changes how much of the disk is covered
-correctly, and changes a great deal about how many filaments exist as recognisable
-objects. What looked like a loss problem was a sampling problem.
-
-\begin{table}[ht]
+\begin{wrapfigure}{r}{0.31\textwidth}
+    \vspace{-1.4em}
     \centering
-    \caption{First campaign. Dice and PQ at threshold $0.5$ without post-processing,
-    so the columns are directly comparable; the operating point is selected afterwards
-    (Section~\ref{sec:operating}).}
-    \label{tab:experiments}
-    \small\begin{tabular}{clrrr}
-        \toprule
-        Exp. & Hypothesis under test & Dice & PQ & Best epoch \\
-        \midrule
-        1 & U-Net from scratch (baseline)              & 0.6415 & --     & 20 \\
-        2 & ImageNet ResNet18 encoder                  & 0.6552 & 0.2505 &  8 \\
-        3 & Tversky + clDice loss                      & 0.4937 & 0.0618 & 13 \\
-        4 & Photometric aug.\ + normalisation + cosine & 0.6591 & 0.2656 & 18 \\
-        5 & Resolution $512 \rightarrow 1024$          & \textbf{0.6701} & \textbf{0.3397} & 15 \\
-        \midrule
-        \multicolumn{2}{l}{\emph{inter-annotator agreement}} & \emph{0.62} & -- & \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+    \includegraphics[width=0.29\textwidth]{../experiments/13/plots/dataset_examples.png}
+    \caption{Three training observations: H-alpha image (left) and one annotator's
+    binary mask (right), with the filament count and the fraction of positive
+    pixels.}
+    \label{fig:dataset}
+    \vspace{-1.2em}
+\end{wrapfigure}
 
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.72\linewidth]{../experiments/05/plots/training_curves.png}
-    \caption{Experiment 5 at $1024 \times 1024$. Validation PQ, the lowest curve on
-    the right, gains far more from the change of scale than Dice does.}
-    \label{fig:experiment-5}
-\end{figure}
+The training set has \textbf{707 observations}. The annotations are COCO, with one
+structural property that shaped every decision in this project: each entry is
+\emph{one annotator's view} of one observation, and the same image appears up to
+three times with different polygons (1154 annotator records in total, 8199
+annotated filaments). The masks are drawn by hand by human annotators and are
+therefore subject to omissions and errors -- this is not a perfect ground truth.
+The annotators genuinely disagree: over the 296 observations traced by more than
+one person, the mean Dice between two annotators of the \emph{same} image is
+$0.62$.
+
+That number measures label noise, not the maximum a model can reach. The score
+compares the prediction against \emph{each} annotator separately and then averages,
+so a prediction close to the consensus only pays for its own errors, while an
+annotator used as a predictor also pays for a colleague's idiosyncrasies. We
+measured it: the majority-vote mask of the annotators -- an oracle, built from the
+very annotations it is scored against -- reaches a mean Dice of $\mathbf{0.81}$
+against the individual annotators. The practical ceiling is there, not at $0.62$:
+the delivered model reaches $0.68$ (Section~\ref{sec:results}), above the agreement
+between two humans but still $\approx 0.13$ short, a gap that
+Section~\ref{sec:error} attributes to recognition of small filaments rather than to
+boundary precision.
+
+Filaments are also small and rare (Figure~\ref{fig:dataset}): the median instance
+covers $\approx$1230 pixels and all of them together only $0.4\%$ of the image,
+which rules out a plain cross-entropy loss and makes input resolution a
+first-class variable.
+
+\subsection{Split protocol}
+
+The split is on \textbf{file names, never on annotation records}: two annotators of
+one observation describe the same pixels, and splitting on records would leak
+validation pixels into training and inflate every score. Seed 22 divides the 707
+observations into three blocks of 494, 106 and 107, written to
+\texttt{splits/split\_seed22.csv}. The third one was an internal test set, never
+consulted to choose anything; from the seventh experiment on we dropped the
+three-way split and folded it into training, where 107 observations are worth more.
+The protocol actually used, and the one behind the delivered model, is therefore
+two-way: \textbf{601 training and 106 validation observations}, with the validation
+set as the only instrument for selecting hyperparameters, checkpoints and the
+operating point.
+
+\subsection{The official metric, re-implemented}
+
+The project work assignment adopts the \textbf{Mean Dice} as its evaluation score;
+the Kaggle challenge scores its leaderboard with \textbf{Panoptic Quality}, so we
+track and report both. The challenge's PQ differs from the textbook definition of
+Section~\ref{sec:background} in three ways that all change what a good prediction
+looks like: ground truth is one instance per annotation rather than connected
+components of the union of every annotator's polygons; each annotator is a separate
+evaluation entry, so one prediction is scored two or three times against experts
+who disagree with each other; and TP, FP and FN accumulate globally over the split
+instead of being averaged per image. The pipeline re-implements exactly that
+definition and verifies it against the organisers' published code, agreeing to
+$3\times10^{-8}$.

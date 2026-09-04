@@ -1,79 +1,92 @@
-\section{From probabilities to a submission}
-\label{sec:operating}
+\section{Model and training}
+\label{sec:method}
 
-Training produces a probability map; four decisions turn it into the mask that is
-scored, and together they are worth more PQ than any single training change. All are
-selected on validation only, and \emph{jointly}, because they interact -- tuning the
-threshold first and the filters afterwards locks in a worse point (on Experiment~5,
-$0.389$ sequential against $0.401$ joint).
+\subsection{Architecture}
 
-\begin{itemize}\itemsep0pt
-    \item the \textbf{threshold} that binarises the probability map;
-    \item \textbf{morphological closing}, which reconnects a filament the network
-          split in two, converting two FP and one FN into one TP;
-    \item a \textbf{minimum component size}, deleting the tiny spurious components of
-          Section~\ref{sec:experiments} that each cost a full false positive;
-    \item a \textbf{confidence gate}: a component survives only if its probability
-          peaks above the gate somewhere. The threshold alone does two jobs at once --
-          deciding \emph{which} blobs exist and \emph{how fat} they are -- so raising
-          it to kill weak blobs also thins every real filament. The gate takes over
-          the existence decision and leaves the outlines where the threshold drew them.
-\end{itemize}
+The model is the U-Net of Section~\ref{sec:background} with a \textbf{ResNet18
+encoder pre-trained on ImageNet} (Figure~\ref{fig:architectures}): with fewer than
+500 training observations, learning edges and textures from scratch wastes the data
+budget. The classification head is discarded and the four convolutional blocks feed
+the U-Net decoder through the skip connections. A one-time algebraic rewrite folds
+the RGB stem and the ImageNet normalisation into an exactly equivalent
+single-channel convolution, so grayscale images enter directly at a third of the
+input bandwidth. The architecture then stays fixed for the whole study: one
+variable per experiment is what makes the comparisons meaningful.
 
-Test-time augmentation over the eight square symmetries averages eight probability
-maps and is kept behind a flag; the threshold must then be re-selected on the averaged
-maps, otherwise TTA looks harmful when it is not.
+Three alternatives were considered and rejected for stated, testable reasons.
+\textbf{Instance-segmentation architectures} such as Mask R-CNN~\cite{maskrcnn}
+rebuild each mask from a $28 \times 28$ grid inside an axis-aligned box -- a
+$\sim\!25\times$ upsampling for objects whose defining property is being a few
+pixels wide and hundreds long -- and elongated diagonal filaments produce heavily
+overlapping, mostly-background boxes, the worst regime for anchor matching. The
+claim was later tested empirically rather than left on paper: a
+YOLOv8x-seg~\cite{yolo} detector trained on the same split reaches a competitive
+instance score (PQ $0.426$) but a clearly worse Dice ($0.632$ against $0.68$),
+confirming the choice for the assignment's score. \textbf{Larger encoders and
+transformers}: across every capacity and resolution tried the quality of matched
+masks never moved (Section~\ref{sec:error}), so capacity is not the binding
+constraint, while the data budget argues against hungrier models. \textbf{Non-neural
+pipelines} (thresholding plus morphology): H-alpha contrast varies strongly between
+observations, and a global photometric rule cannot separate filaments from sunspots
+and limb darkening.
 
-\subsection{Scoring what the leaderboard scores, where it scores it}
-\label{sec:native}
+\begin{figure}[t]
+    \centering
+    \begin{minipage}[c]{0.46\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
+    \end{minipage}\hfill
+    \begin{minipage}[c]{0.50\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
+    \end{minipage}
+    \caption{Left: the U-Net encoder--decoder with skip connections. Right: the
+    ResNet18 encoder that replaces the from-scratch one; its classification head is
+    discarded and the four convolutional blocks feed the U-Net decoder.}
+    \label{fig:architectures}
+\end{figure}
 
-Two things had to be right for a validation number to mean anything. \textbf{What}: the
-official PQ of Section~\ref{sec:metrics}, re-implemented and verified to
-$3\times10^{-8}$ against the organisers' code. On the union of two or three annotators
-an image carries about eleven filaments against under seven for any single one, so a
-model tuned against the wrong definition systematically over-predicts.
-\textbf{Where}: the submission is written at $2048^2$, but early operating points were
-selected at training resolution -- a protocol mismatch, since a minimum size tuned at
-$1024$ means something else at $2048$ and the number of connected components is not
-preserved by resizing a mask at all. The fix is to enlarge the \emph{probability} map
-to native resolution and only then threshold, post-process and score. Measured on
-Experiment~5, selecting at native resolution against the official metric is worth
-$+0.020$ Dice and $+0.006$ PQ over the recipe that would otherwise have shipped
-(Table~\ref{tab:native}) -- for free, with no retraining.
+\subsection{Loss, optimisation and implementation}
+
+The loss is an equally weighted combination of binary cross-entropy and soft
+Dice~\cite{vnet}: Dice is immune to the $0.4\%$ positive rate but says nothing
+about confidence, while BCE keeps the probabilities \emph{calibrated}, which is
+what makes the threshold search of Section~\ref{sec:operating} well behaved --
+experiment 3 shows what happens when that calibration is lost. Augmentation uses
+the eight symmetries of the square, which are label-preserving because filaments
+have no canonical orientation, plus photometric jitter for the varying H-alpha
+contrast. Optimisation is AdamW~\cite{adamw}, batch size 2, at most 20 epochs, with
+early stopping on validation Dice. The checkpoint is selected on \textbf{Dice}, not
+PQ: PQ depends strongly on the threshold and post-processing, which are tuned
+afterwards on the same validation set, so selecting weights with it would optimise
+two coupled quantities at once.
+
+Two implementation choices make the study affordable. Images and masks are decoded
+\emph{once} into memory-mapped uint8 caches -- the whole ground truth at $1024^2$
+takes 150~MB instead of 1.2~GB -- so an epoch only reads bytes instead of decoding
+JPEGs and rasterising polygons. Training runs in mixed precision with gradient
+checkpointing at the higher resolutions, and peak GPU memory is \emph{measured} at
+the step that actually peaks, never estimated from parameter counts.
 
 \begin{table}[ht]
     \centering
-    \caption{Experiment 5, same checkpoint, four ways of choosing the operating point,
-    all scored with the competition's own metric at $2048^2$.}
-    \label{tab:native}
-    \small\begin{tabular}{lccrrrr}
+    \caption{Measured cost of the delivered pipeline. Training and the
+    operating-point search run on a Colab GPU; inference was also run on a laptop
+    GPU. Both notebooks run unchanged in Colab and Kaggle, as the assignment
+    requires.}
+    \label{tab:cost}
+    \small\begin{tabular}{lr}
         \toprule
-        Selection protocol & $t$ & closing / min.\ size & Dice & PQ & SQ & RQ \\
+        Step & Cost \\
         \midrule
-        tuned at $1024$ on PQ            & 0.65 & 1 / 512 & 0.6462 & 0.3901 & 0.660 & 0.591 \\
-        tuned at $1024$ on Dice+PQ       & 0.90 & 1 / 256 & 0.6590 & 0.3964 & 0.662 & 0.599 \\
-        tuned at $2048$, internal metric & 0.70 & 2 / 256 & 0.6653 & 0.3965 & 0.660 & 0.601 \\
-        tuned at $2048$, official metric & 0.75 & 2 / 256 & \textbf{0.6665} & \textbf{0.4022} & 0.662 & 0.608 \\
+        Training, one epoch (601 windows of $1536^2$)      & 105 s \\
+        Full training (19 epochs, early stopping)          & 33 min \\
+        Operating-point search (1437 combinations at $2048^2$) & 10 min \\
+        Inference on the 180 test images, with D4 TTA      & 14 min \\
+        \midrule
+        Peak GPU memory in training (bonus threshold 5~GB) & \textbf{3.04 GB} \\
+        Peak GPU memory at inference (bonus threshold 4~GB) & \textbf{2.50 GB} \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-A last refinement came late and cost nothing: the leaderboard reports PQ and nothing
-else, but the recipe had historically been frozen on the \emph{balanced} objective
-$\mathrm{Dice} + \mathrm{PQ}$. Re-selecting the final model's point on pure PQ, with a
-second, finer threshold pass around the coarse optimum
-(Figure~\ref{fig:threshold-search}), moves it from $0.4194$ to $\mathbf{0.4264}$
-(threshold $0.48$, closing $1$, minimum size $384$, gate $0.97$). Cross-selection --
-choosing the point on one half of the validation files and scoring it on the other --
-puts the overfitting cost of the finer grid at only $0.0024$, with both halves
-independently selecting the same threshold and gate: the refinement is real, not grid
-noise.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.62\linewidth]{../experiments/08/plots/threshold_search.png}
-    \caption{Validation Dice and PQ against the threshold for the final model
-    (no post-processing). The two metrics peak at different points; the shipped
-    recipe is selected on PQ, jointly with closing, minimum size and gate.}
-    \label{fig:threshold-search}
-\end{figure}

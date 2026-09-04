@@ -1,0 +1,24 @@
+{
+  "experiment_id": "Y2",
+  "training": {
+    "model": "yolov8m-seg.pt",
+    "image_size": 1792,
+    "batch": 4,
+    "epochs_requested": 120,
+    "total_minutes": 48.4194214121,
+    "peak_training_memory_gb": 21.59148645401001,
+    "run_dir": "experiments/Y2/yolo/train"
+  },
+  "operating_point": {
+    "experiment_id": "Y2",
+    "detector": "yolov8m-seg.pt",
+    "checkpoint": "experiments/Y2/checkpoints/best_model.pt",
+    "image_size": 1792,
+    "conf": 0.3,
+    "iou": 0.0,
+    "max_det": 50,
+    "retina_masks": true,
+    "validation_dice": 0.6181016182353172,
+    "validation_pq": 0.41966563054956024
+  }
+}

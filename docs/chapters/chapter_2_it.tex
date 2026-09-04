@@ -1,96 +1,50 @@
-\section{Modello e pipeline}
-\label{sec:method}
+\section{Background: predizione densa e metriche a istanze}
+\label{sec:background}
 
-\subsection{Una U-Net con encoder ResNet18 pre-addestrato}
+\subsection{Predizione densa}
 
-Una CNN di classificazione comprime l'immagine in un'unica predizione; la
-segmentazione ne richiede una per pixel, quindi il dettaglio spaziale che l'encoder
-scarta va reintrodotto. La U-Net lo fa con un encoder--decoder simmetrico e con le
-\textbf{skip connection} che copiano ogni stadio dell'encoder nello stadio del decoder
-alla stessa risoluzione (Figura~\ref{fig:architectures}, a sinistra). Per strutture
-sottili, allungate e irregolari le skip non sono una rifinitura: sono ciò che impedisce
-a un filamento di dissolversi nel collo di bottiglia. La rete emette un logit per
-pixel; una sigmoide lo trasforma in probabilità e una soglia scelta in validazione
-nella maschera binaria.
+Una CNN di classificazione risponde a una domanda per immagine: i suoi stadi di
+pooling scartano progressivamente \emph{dove} stanno le cose per decidere
+\emph{cosa} è l'immagine. La segmentazione chiede l'opposto -- una decisione per
+pixel -- quindi il dettaglio spaziale buttato dall'encoder va ricostruito. Un
+decoder di convoluzioni trasposte può riportare il collo di bottiglia a piena
+risoluzione, ma per strutture larghe pochi pixel non basta: arrivato al collo di
+bottiglia, un filamento sottile è già stato eliminato dal pooling e nessun
+upsampling può reinventarlo. La \textbf{U-Net}~\cite{unet} risolve esattamente
+questo con le skip connection che copiano ogni stadio dell'encoder nello stadio del
+decoder alla stessa risoluzione: il dettaglio fine viaggia \emph{attorno} al collo
+di bottiglia invece che attraverso. Per filamenti scuri, sottili e allungati quelle
+skip non sono una rifinitura: sono il motivo per cui la predizione esiste.
 
-La baseline (Esperimento~1) usa un encoder addestrato da zero con 1,9M di parametri.
-Dall'Esperimento~2 in poi l'encoder è una \textbf{ResNet18 pre-addestrata su ImageNet}
-(Figura~\ref{fig:architectures}, a destra, senza la testa di classificazione),
-raffinata end-to-end: con meno di 500 osservazioni di training, imparare da zero bordi
-e texture spreca il budget di dati. Il decoder resta lo stesso, quindi il confronto
-isola l'encoder. L'architettura viene poi tenuta fissa per il resto dello studio, di
-proposito: una variabile per esperimento è ciò che dà senso ai confronti.
+L'encoder non deve essere addestrato da zero. Le reti residuali~\cite{resnet}
+pre-addestrate su ImageNet~\cite{imagenet} forniscono filtri generali di bordi e
+texture, cosa che conta quando il training set è piccolo.
 
-\begin{figure}[t]
-    \centering
-    \begin{minipage}[c]{0.46\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
-    \end{minipage}\hfill
-    \begin{minipage}[c]{0.50\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
-    \end{minipage}
-    \caption{A sinistra: l'encoder--decoder U-Net con le skip connection. A destra:
-    l'encoder ResNet18 che sostituisce quello da zero dall'Esperimento~2 in poi; la
-    testa di classificazione (a destra nella figura) viene scartata e i quattro blocchi
-    convoluzionali alimentano il decoder U-Net attraverso le skip connection.}
-    \label{fig:architectures}
-\end{figure}
+\subsection{Metriche a istanze}
 
-Un'ottimizzazione gratuita merita un paragrafo. Dare un'immagine in scala di grigi a un
-encoder ImageNet di solito significa replicare il canale tre volte e normalizzare con
-media $m_c$ e deviazione standard $s_c$ RGB. Scrivendo la pre-attivazione dello stem
-per un'immagine $g$ la ridondanza è evidente:
+Due maschere $P$ e $G$ si confrontano con l'Intersection over Union o con il
+coefficiente di Dice, strettamente imparentato,
 %
 \begin{equation}
-\sum_{c} W_c * \frac{g - m_c}{s_c}
-= \Bigl(\sum_{c} \frac{W_c}{s_c}\Bigr) * g \;-\; k,
+\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
+\qquad
+\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|},
 \end{equation}
 %
-dove $k$ è una costante per canale d'uscita che la batch norm immediatamente
-successiva assorbe nella propria media. Lo stem a tre canali viene quindi sostituito
-da uno \emph{a canale singolo} esattamente equivalente: i pesi pre-addestrati sono
-interamente preservati, il tensore d'ingresso si riduce di tre volte e la
-normalizzazione sparisce dalla pipeline dei dati.
-
-\subsection{Loss e protocollo di addestramento}
-\label{sec:protocol}
-
-La loss è una miscela in parti uguali di binary cross-entropy e soft Dice. Ogni termine
-fa un lavoro che l'altro non può fare: il Dice è immune al tasso di positivi dello
-$0{,}4\%$ ma non dice nulla sulla confidenza, mentre la BCE mantiene le probabilità
-\emph{calibrate}, che è ciò che rende ben condizionata la ricerca della soglia della
-Sezione~\ref{sec:operating}. L'Esperimento~3 mostra cosa succede quando quella
-calibrazione si perde.
-
-Il protocollo è identico in ogni run. Lo split è sui \textbf{nomi dei file}, mai sui
-record di annotazione -- lo stesso JPEG compare fino a tre volte nel file COCO, una per
-annotatore, e dividere per record metterebbe una copia in training e una in
-validazione, gonfiando ogni punteggio. Il seed 22 dà 494/106/107 osservazioni
-(806/169/179 record), salvate in \texttt{splits/split\_seed22.csv}; il test interno si
-consulta una volta sola, a tutto congelato. L'augmentation usa le otto simmetrie del
-quadrato (i filamenti non hanno orientamento canonico) più jitter fotometrico.
-L'ottimizzazione è AdamW, batch size 2, al più 20 epoche, early stopping sul Dice di
-validazione con pazienza 8. Il checkpoint si sceglie sul \textbf{Dice}, non sulla PQ:
-la PQ dipende fortemente da soglia e post-processing, regolati dopo sullo stesso
-insieme di validazione, e scegliere i pesi con essa ottimizzerebbe due quantità
-accoppiate in un colpo solo.
-
-\subsection{Ingegneria: velocità di iterazione e memoria}
-
-Decodificare un JPEG $2048^2$ e rasterizzarne i poligoni costa più di un forward e un
-backward; fatto dentro il dataset, quel prezzo si ripaga a ogni epoca. Tutte le
-immagini e le maschere vengono quindi decodificate \emph{una sola volta} in array uint8
-mappati in memoria (maschere impacchettate a bit: tutta la ground truth a $1024^2$
-occupa 150~MB invece di 1,2~GB), e ogni run riusa la cache. L'addestramento gira in
-precisione mista con gradient checkpointing alle risoluzioni più alte; il picco di
-memoria GPU è misurato nel momento in cui uno step raggiunge davvero il massimo, non
-stimato dai parametri. Rispetto al budget opzionale della consegna (5~GB in training,
-4~GB in test), l'inferenza resta ampiamente dentro a 2,5~GB; il training ha misurato
-3,7~GB a $1024^2$ e 5,2~GB per la ricetta full-frame $1536^2$ del modello finale -- una
-configurazione a finestre native (Esperimento~13, Sezione~\ref{sec:second-campaign})
-riporta lo stesso step a 3,0~GB, ma ha perso PQ e non è stata mantenuta. Le mappe di probabilità di
-validazione sono salvate in uint8 -- la griglia delle soglie ha passi molto più grossi
-di $1/255$ -- ed è questo che rende sostenibile a risoluzione nativa la ricerca
-congiunta dell'operating point della Sezione~\ref{sec:operating}.
+entrambe misure a livello di pixel. La \textbf{Panoptic Quality}~\cite{panoptic}
+valuta invece oggetti: istanze predette e annotate vengono accoppiate quando la
+loro IoU supera $0{,}5$, e
+%
+\begin{equation}
+\mathrm{PQ}
+ = \underbrace{\frac{\sum_{\mathrm{TP}} \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
+   \times
+   \underbrace{\frac{|\mathrm{TP}|}
+        {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}},
+\end{equation}
+%
+qualità della segmentazione per qualità del riconoscimento. È la fattorizzazione a
+rendere la PQ diagnostica: SQ dice quanto bene si sovrappongono le maschere
+accoppiate, RQ quanti oggetti vengono trovati. Le due metriche divergono in modo
+informativo: una predizione frammentata o rumorosa muove appena il Dice e distrugge
+RQ.

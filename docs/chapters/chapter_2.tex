@@ -1,93 +1,49 @@
-\section{Model and pipeline}
-\label{sec:method}
+\section{Background: dense prediction and instance metrics}
+\label{sec:background}
 
-\subsection{A U-Net with a pre-trained ResNet18 encoder}
+\subsection{Dense prediction}
 
-A classification CNN compresses an image into one prediction; segmentation needs one
-per pixel, so the spatial detail the encoder discards has to be put back. U-Net does
-this with a symmetric encoder--decoder and \textbf{skip connections} that copy each
-encoder stage to the decoder stage of the same resolution
-(Figure~\ref{fig:architectures}, left). For thin, elongated, irregular structures the
-skips are not a refinement -- they are what keeps a filament from dissolving in the
-bottleneck. The network emits one logit per pixel; a sigmoid turns it into a
-probability, and a threshold selected on validation into the binary mask.
+A classification CNN answers one question per image: its pooling stages
+progressively discard \emph{where} things are in order to decide \emph{what} the
+image is. Segmentation asks the opposite -- one decision per pixel -- so the
+spatial detail the encoder throws away has to be rebuilt. A decoder of transposed
+convolutions can upsample the bottleneck back to full resolution, but for
+structures a few pixels wide that is not enough: by the bottleneck a thin filament
+has already been pooled out of existence, and no upsampling reinvents it. The
+\textbf{U-Net}~\cite{unet} solves exactly this with skip connections that copy each
+encoder stage into the decoder stage of the same resolution: the fine detail
+travels \emph{around} the bottleneck instead of through it. For dark, thin,
+elongated filaments those skips are not a refinement -- they are why the prediction
+exists at all.
 
-The baseline (Experiment~1) uses a from-scratch encoder with 1.9M parameters. From
-Experiment~2 onwards the encoder is a \textbf{ResNet18 pre-trained on ImageNet}
-(Figure~\ref{fig:architectures}, right, without its classification head), fine-tuned
-end to end: with fewer than 500 training observations, learning basic edges and
-textures from scratch wastes the data budget. The decoder stays the same, so the
-comparison isolates the encoder. The architecture is then held fixed for the rest of
-the study on purpose -- one variable per experiment is what makes the comparisons mean
-anything.
+The encoder need not be trained from scratch. Residual networks~\cite{resnet}
+pre-trained on ImageNet~\cite{imagenet} provide general edge and texture filters,
+which matters when the training set is small.
 
-\begin{figure}[t]
-    \centering
-    \begin{minipage}[c]{0.46\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
-    \end{minipage}\hfill
-    \begin{minipage}[c]{0.50\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
-    \end{minipage}
-    \caption{Left: the U-Net encoder--decoder with skip connections. Right: the
-    ResNet18 encoder that replaces the from-scratch one from Experiment~2 onwards;
-    its classification head (right of the figure) is discarded and the four
-    convolutional blocks feed the U-Net decoder through the skip connections.}
-    \label{fig:architectures}
-\end{figure}
+\subsection{Instance metrics}
 
-One free optimisation is worth a paragraph. Feeding grayscale to an ImageNet encoder
-normally means replicating the channel three times and normalising with the RGB mean
-$m_c$ and standard deviation $s_c$. Writing out the stem pre-activation for a grayscale
-image $g$ shows the redundancy:
+Two masks $P$ and $G$ are compared by their Intersection over Union or by the
+closely related Dice coefficient,
 %
 \begin{equation}
-\sum_{c} W_c * \frac{g - m_c}{s_c}
-= \Bigl(\sum_{c} \frac{W_c}{s_c}\Bigr) * g \;-\; k,
+\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
+\qquad
+\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|},
 \end{equation}
 %
-where $k$ is a per-output-channel constant that the batch norm immediately after
-absorbs into its running mean. The three-channel stem is therefore replaced by an
-exactly equivalent \emph{single-channel} one: the pre-trained weights are fully
-preserved, the input tensor shrinks threefold, and normalisation disappears from the
-data pipeline.
-
-\subsection{Loss and training protocol}
-\label{sec:protocol}
-
-The loss is an equal mix of binary cross-entropy and soft Dice. Each term does a job
-the other cannot: Dice is immune to the $0.4\%$ positive rate but says nothing about
-confidence, while BCE keeps the probabilities \emph{calibrated}, which is what makes
-the threshold search of Section~\ref{sec:operating} well behaved. Experiment~3 shows
-what happens when that calibration is lost.
-
-The protocol is identical in every run. The split is on \textbf{file names}, never on
-annotation records -- the same JPEG appears up to three times in the COCO file, once
-per annotator, and splitting on records would put one copy in training and another in
-validation, inflating every score. Seed 22 gives 494/106/107 observations (806/169/179
-records), written to \texttt{splits/split\_seed22.csv}; the internal test split is
-consulted once, after everything is frozen. Augmentation uses the eight symmetries of
-the square (filaments have no canonical orientation) plus photometric jitter.
-Optimisation is AdamW, batch size 2, at most 20 epochs, early stopping on validation
-Dice with patience 8. The checkpoint is selected on \textbf{Dice}, not PQ: PQ depends
-strongly on the threshold and post-processing, tuned afterwards on the same validation
-set, and selecting weights with it would optimise two coupled quantities at once.
-
-\subsection{Engineering for iteration speed and memory}
-
-Decoding a $2048^2$ JPEG and rasterising its polygons costs more than a forward and
-backward pass; done inside the dataset, that price recurs every epoch. All images and
-masks are therefore decoded \emph{once} into memory-mapped uint8 arrays (masks
-bit-packed: the whole ground truth at $1024^2$ takes 150~MB instead of 1.2~GB), and
-every run reuses the cache. Training runs in mixed precision with gradient
-checkpointing at the higher resolutions; peak GPU memory is measured at the moment a
-step actually peaks, not estimated from parameter counts. Against the assignment's
-optional budget (5~GB training, 4~GB test), inference stays well inside at 2.5~GB;
-training measured 3.7~GB at $1024^2$ and 5.2~GB for the full-frame $1536^2$ recipe of
-the final model -- a windowed-native configuration (Experiment~13,
-Section~\ref{sec:second-campaign}) brings the same step to 3.0~GB, though it lost PQ
-and was not kept. Validation probability maps are stored as uint8 --
-the threshold grid steps far coarser than $1/255$ -- which is what makes the joint
-operating-point search of Section~\ref{sec:operating} affordable at native resolution.
+both pixel-level measures. \textbf{Panoptic Quality}~\cite{panoptic} instead scores
+objects: predicted and annotated instances are matched when their IoU exceeds
+$0.5$, and
+%
+\begin{equation}
+\mathrm{PQ}
+ = \underbrace{\frac{\sum_{\mathrm{TP}} \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
+   \times
+   \underbrace{\frac{|\mathrm{TP}|}
+        {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}},
+\end{equation}
+%
+segmentation quality times recognition quality. The factorisation is what makes PQ
+diagnostic: SQ says how well matched masks overlap, RQ how many objects are found
+at all. The two metrics disagree in an informative way -- a fragmented or noisy
+prediction barely moves Dice and destroys RQ.

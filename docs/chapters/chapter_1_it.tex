@@ -1,83 +1,43 @@
-\section{Il problema, i dati e le metriche}
-\label{sec:framing}
+\section{Introduzione}
+\label{sec:intro}
 
-I filamenti solari sono nastri di plasma più freddo sospesi sul disco solare, visibili
-come strutture scure e allungate nelle immagini H-alpha. Il compito è una segmentazione
-binaria con una piega a istanze: data un'osservazione $2048 \times 2048$, predire quali
-pixel appartengono a un filamento, separare la maschera in una componente connessa per
-filamento e inviare ogni componente come run-length encoding in formato COCO.
+Questa relazione descrive come abbiamo progettato, addestrato e selezionato il
+modello che consegniamo per la segmentazione dei filamenti solari nelle immagini
+H-alpha, e anche quali ipotesi abbiamo provato e dovuto respingere lungo il
+percorso.
 
-\subsection{Com'è fatto il dataset}
-\label{sec:dataset}
+Due fatti hanno condizionato quasi tutte le nostre decisioni. Primo, \textbf{le annotazioni sono
+soggettive}: ogni osservazione è stata tracciata da un massimo di tre esperti che
+concordano tra loro solo fino a un Dice di $0{,}62$, quindi parte dell'errore che
+misuriamo è disaccordo tra esperti e non errore del modello. Secondo, \textbf{sono in gioco due
+punteggi diversi}: la traccia del project work valuta il Mean Dice, mentre la
+challenge Kaggle ordina la sua leaderboard con la Panoptic Quality (PQ). La
+configurazione consegnata è ottimizzata per il primo; la seconda è studiata a
+parte, nella Sezione~\ref{sec:kaggle}.
 
-Il training set contiene \textbf{707 osservazioni} provenienti dalle sei stazioni della
-rete GONG (Big Bear, Cerro Tololo, Learmonth, Mauna Loa, El Teide, Udaipur), acquisite
-tra il 2011 e il 2022 con una forte prevalenza del massimo solare 2011--2015. Le
-annotazioni vengono dal catalogo MAGFiLO e hanno una struttura che ha plasmato l'intero
-progetto: ciascuno dei \textbf{1154 record di annotazione} è \emph{la vista di un
-singolo annotatore} su un'osservazione. 411 file sono annotati da un solo esperto, 145
-da due e 151 da tre, e gli annotatori sono genuinamente in disaccordo -- il Dice medio
-tra due annotatori della \emph{stessa} immagine è $0{,}62$ (mediana $0{,}65$).
+I contributi principali sono:
 
-Gli 8199 filamenti annotati sono piccoli e sottili: il filamento mediano copre circa
-1230~pixel a risoluzione nativa (intervallo interquartile 670--2430, il 15\% sotto i
-500), e tutti i filamenti insieme coprono solo lo $0{,}4\%$ circa dei pixel. Tre
-conseguenze guidano il progetto. Lo sbilanciamento estremo delle classi esclude una
-cross-entropy pura; strutture larghe pochi pixel vengono distrutte da un
-ridimensionamento aggressivo, il che renderà la \emph{risoluzione} la variabile più
-produttiva dello studio; e con sole 494 osservazioni di training (il training set non è
-estendibile per regolamento), transfer learning e augmentation restano le uniche leve.
+\begin{itemize}\itemsep0pt
+    \item una U-Net con encoder ResNet18 pre-addestrato che raggiunge
+          \textbf{Dice 0,6815} in validazione, sopra l'accordo inter-annotatore,
+          dentro il budget GPU opzionale (3,04~GB in training, 2,50~GB in
+          inferenza);
+    \item una pipeline di valutazione che reimplementa la PQ della challenge ed è
+          verificata contro il codice degli organizzatori a $3\times10^{-8}$, così
+          ogni numero di validazione è direttamente confrontabile con la
+          leaderboard;
+    \item uno stadio di post-processing i cui quattro iper-parametri sono cercati a
+          griglia congiuntamente sul validation set -- vale più della maggior parte
+          delle modifiche all'addestramento e non costa un minuto di training;
+    \item un registro di falsificazioni: quindici run di addestramento e una
+          dozzina di meccanismi post-hoc misurati e, in gran parte, respinti,
+          insieme a una soglia di rumore misurata sotto la quale un guadagno in
+          validazione non è credibile.
+\end{itemize}
 
-\subsection{Metriche: IoU, Dice e Panoptic Quality}
-\label{sec:metrics}
-
-Due maschere $P$ (predizione) e $G$ (ground truth) si confrontano con
-l'\textbf{Intersection over Union} o con il coefficiente di \textbf{Dice}, strettamente
-imparentato:
-%
-\begin{equation}
-\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
-\qquad
-\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|}.
-\end{equation}
-%
-Entrambe sono misure a livello di pixel. Il Dice è ciò che il corso valuta; la
-submission Kaggle, però, chiede una riga per \emph{filamento}, e la leaderboard
-riflette la \textbf{Panoptic Quality}. Istanze predette e annotate vengono accoppiate
-quando la loro IoU supera $0{,}5$ (le coppie sono veri positivi, le predizioni spaiate
-falsi positivi, le annotazioni spaiate falsi negativi), e
-%
-\begin{equation}
-\mathrm{PQ} = \frac{\sum_{(p,g) \in \mathrm{TP}} \mathrm{IoU}(p,g)}
-                   {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}
-            = \underbrace{\frac{\sum \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
-              \times
-              \underbrace{\frac{|\mathrm{TP}|}
-                               {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}}.
-\end{equation}
-%
-La fattorizzazione conta: la \emph{Segmentation Quality} misura quanto bene si
-sovrappongono le istanze accoppiate, la \emph{Recognition Quality} quante istanze
-vengono trovate. Il divario tra Dice e PQ è l'intera storia di questo progetto -- un
-filamento spezzato in tre frammenti, o una maschera corretta circondata da venti
-macchioline di dieci pixel, sposta il Dice di una frazione di punto e fa crollare RQ.
-
-La PQ della competizione, pubblicata nel notebook di autovalutazione degli
-organizzatori, differisce dalla definizione da manuale in tre punti che cambiano tutti
-l'aspetto di una buona predizione: la ground truth è \emph{un'istanza per annotazione},
-non le componenti connesse dell'unione dei poligoni di tutti gli annotatori;
-\emph{ogni annotatore è una voce di valutazione separata}, quindi una stessa predizione
-viene valutata due o tre volte contro esperti in disaccordo tra loro; e TP/FP/FN si
-accumulano \emph{globalmente} sull'intero split anziché per immagine. La pipeline
-reimplementa esattamente questa definizione e la verifica contro il codice di
-riferimento (accordo a $3 \times 10^{-8}$), quindi ogni numero di validazione di questa
-relazione è direttamente confrontabile con la leaderboard.
-
-\subsection{Quanto in alto si può arrivare}
-
-Il Dice inter-annotatore di $0{,}62$ è un tetto pratico: oltre, un modello non sta
-segmentando meglio, sta imparando l'idea di un singolo esperto su dove finisce un
-filamento. Il numero riformula il problema -- già dal secondo esperimento il modello è
-a quel tetto sul Dice mentre la PQ è intorno a $0{,}25$, quindi il margine sta tutto in
-come la maschera è \emph{organizzata in istanze}. Ogni ipotesi che segue nasce da
-questa osservazione.
+La Sezione~\ref{sec:background} richiama gli ingredienti e le metriche, la
+Sezione~\ref{sec:data} i dati e il protocollo di valutazione, la
+Sezione~\ref{sec:method} il modello e il suo addestramento, la
+Sezione~\ref{sec:design} come sono stati pianificati gli esperimenti, la
+Sezione~\ref{sec:results} cosa hanno prodotto, la Sezione~\ref{sec:error} dove vive
+l'errore residuo, e la Sezione~\ref{sec:conclusions} conclude.

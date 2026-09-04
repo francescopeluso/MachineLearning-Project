@@ -1,0 +1,9 @@
+{
+  "model": "yolov8x-seg.pt",
+  "image_size": 1792,
+  "batch": -1,
+  "epochs_requested": 100,
+  "total_minutes": 134.89652338726668,
+  "peak_training_memory_gb": 38.74130964279175,
+  "run_dir": "experiments/Y3/yolo/train"
+}

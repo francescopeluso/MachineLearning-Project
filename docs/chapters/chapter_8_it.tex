@@ -1,0 +1,36 @@
+\section{Conclusioni e sviluppi futuri}
+\label{sec:conclusions}
+
+Il modello consegnato è l'esperimento 13 -- una ResNet18-U-Net addestrata su
+finestre casuali $1536^2$ del frame nativo $2048^2$ -- con la configurazione di
+inferenza, selezionata sul validation set, congelata sul punteggio della traccia:
+\textbf{Dice 0,6815} in validazione, il massimo dello studio, PQ 0,393 nello stesso
+punto, training a \textbf{3,04~GB} e inferenza a \textbf{2,50~GB}, dentro il budget
+GPU opzionale su entrambi i fronti. I notebook di training e test consegnati
+riproducono configurazione e submission da cima a fondo.
+
+Tre lezioni valgono oltre questo dataset. \textbf{Misurare ciò che il punteggio
+misura, dove lo misura}: selezionare l'operating point a risoluzione nativa, contro
+la definizione ufficiale della metrica e sull'obiettivo effettivamente valutato, è
+valso più della maggior parte delle modifiche all'addestramento -- tutto gratis.
+\textbf{Scegliere la metrica che vede il modo di fallire}: il Dice ha superato
+l'accordo tra due annotatori al secondo esperimento ed è poi rimasto quasi piatto;
+ogni
+miglioramento reale successivo era visibile solo nel termine di riconoscimento
+della PQ, e una valutazione limitata a una sola metrica avrebbe dichiarato il
+progetto concluso dieci esperimenti prima. \textbf{Un'ipotesi falsificata non è un
+run sprecato}: oltre venti idee sono state misurate e respinte, e ogni rigetto ha
+ridiretto lo sforzo -- il fallimento dell'esperimento 3 ha esposto il problema della
+risoluzione, il fallimento di ogni meccanismo post-hoc ha mostrato che l'errore
+residuo vive nel supporto di probabilità del modello, e il protocollo di
+cross-selection ha separato i guadagni veri dal rumore di selezione al livello di
+$\pm 0{,}005$.
+
+Il divario di riconoscimento che resta -- il recall dei filamenti piccoli e deboli
+contro annotazioni incomplete -- è, sull'evidenza raccolta qui, un problema di dati
+di addestramento più che di architettura. Due direzioni seguono direttamente: un
+protocollo cross-validato in cui ogni osservazione addestra un modello, così che
+l'operating point venga selezionato su $6{,}7\times$ più voci di annotazione e i
+guadagni sotto l'attuale soglia di rumore diventino misurabili; e il
+pseudo-labelling dei filamenti che il modello trova e nessun annotatore ha marcato,
+che gli organizzatori hanno confermato esistere nei dati.
