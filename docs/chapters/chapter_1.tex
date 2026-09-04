@@ -1,39 +1,26 @@
 \section{Introduction}
 \label{sec:intro}
 
-This report describes how we designed, trained and selected the model we deliver
-for the segmentation of solar filaments in H-alpha images, and also which
-hypotheses we tried and had to reject along the way.
+Automatic solar-filament segmentation requires detecting thin, low-contrast structures
+in full-disc images. The task is complicated by the strong imbalance between foreground
+and background, the variation in filament shape and size, and the availability of
+multiple annotations for the same observation. A useful prediction must therefore
+identify filament pixels without producing too many spurious or fragmented regions.
 
-Two facts shaped most of our decisions. First, \textbf{the annotations are subjective}:
-each observation was traced by up to three experts who agree with one another only
-to a Dice of $0.62$, so part of the error we measure is expert disagreement rather
-than a modelling error. Second, \textbf{two different scores are in play}: the project work
-assignment is evaluated on the Mean Dice, while the Kaggle challenge ranks its
-leaderboard by Panoptic Quality (PQ). The delivered configuration is optimised for
-the former; the latter is studied separately, in Section~\ref{sec:kaggle}.
+This work develops a reproducible pipeline for image segmentation and subsequent
+instance extraction. Its main model is a U-Net with a pre-trained ResNet18 encoder,
+chosen to combine semantic information with spatial detail. Mean Dice is the primary
+metric, while Panoptic Quality (PQ) also evaluates instance recognition. GPU-memory use
+and execution time are measured because the solution must be trainable and usable with
+limited resources.
 
-The main contributions are:
+During development, \textbf{22 experimental configurations were run}. The report focuses
+on the eight numbered experiments that determined the main design choices. It also compares the
+full-resolution U1 and U2 variants and the three YOLO detector experiments. This
+organisation reconstructs the path from the baseline to the delivered model while also
+showing alternatives that improved PQ at a higher computational cost.
 
-\begin{itemize}\itemsep0pt
-    \item a U-Net with a pre-trained ResNet18 encoder reaching \textbf{validation
-          Dice 0.6815}, above inter-annotator agreement, inside the optional GPU
-          budget (3.04~GB in training, 2.50~GB at inference);
-    \item an evaluation pipeline that re-implements the challenge's own PQ and is
-          verified against the organisers' code to $3\times10^{-8}$, so every
-          validation number is directly comparable with the leaderboard;
-    \item a post-processing stage whose four hyperparameters are grid-searched
-          jointly on the validation set -- worth more than most training changes
-          and costing no training time at all;
-    \item a falsification record: fifteen training runs and a dozen post-hoc
-          mechanisms measured and, for the most part, rejected, together with a
-          measured noise floor below which a validation gain cannot be believed.
-\end{itemize}
-
-Section~\ref{sec:background} recalls the ingredients and the metrics,
-Section~\ref{sec:data} the data and the evaluation protocol,
-Section~\ref{sec:method} the model and its training,
-Section~\ref{sec:design} how the experiments were planned,
-Section~\ref{sec:results} what they produced,
-Section~\ref{sec:error} where the residual error lives, and
-Section~\ref{sec:conclusions} concludes.
+The following sections define the metrics and validation protocol, describe the
+architecture and training procedure, and discuss the most significant experiments. The
+final part analyses prediction errors, computational cost and the main limitations of
+the solution.

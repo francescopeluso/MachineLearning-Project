@@ -1,55 +1,67 @@
-\section{Experimental design}
+\section{Experimental strategy}
 \label{sec:design}
 
-The experiments are not a chronology. Before training anything, the observations of
-Section~\ref{sec:data} were turned into an ordered list of hypotheses, each changing
-exactly one variable and each falsifiable by a single number:
+\subsection{Hypotheses and decision criteria}
 
-\begin{enumerate}\itemsep0pt
-    \item a plain encoder--decoder already finds the main filaments, and gives a
-          baseline worth comparing against;
-    \item with fewer than 500 observations the binding constraint is the encoder,
-          so ImageNet features should beat random initialisation;
-    \item Dice is blind to fragmentation, so a loss that is not -- Tversky plus
-          clDice -- should raise PQ where Dice cannot;
-    \item part of what remains is the H-alpha \emph{domain} rather than the loss;
-    \item what limits the score is \emph{scale}: at $512 \times 512$ a filament six
-          native pixels wide is one and a half pixels wide.
-\end{enumerate}
-
-Hypotheses 3 and 5 make opposite predictions about where the residual error lives,
-and only one of them survives contact with the data. Later hypotheses were derived
-the same way, each from the error analysis of the run before it.
-
-Two rules kept the study honest. A candidate is compared against the previous best
-only \emph{at its own operating point}, re-searched from scratch, because a
-different loss or resolution shifts the calibration and reusing an old threshold
-would falsify a good idea for the wrong reason. And a gain is believed only if it
-survives \textbf{cross-selection}: the operating point is chosen on one half of the
-validation files and scored on the other. Measured that way, on 169 annotator
-entries, \textbf{any gain below $\approx 0.005$ is indistinguishable from selection
-noise} -- a threshold that later killed three mechanisms whose aggregate numbers
-had looked positive.
-
-Before starting, we also wrote down what we were going to explore and how long it
-would take, so that the study would fit in the time we had
-(Table~\ref{tab:plan}).
+The experimental plan was defined around a limited set of hypotheses. Each hypothesis
+was associated with a measurable comparison and with a decision that could be taken
+from the result. Table~\ref{tab:plan} summarises this structure.
 
 \begin{table}[ht]
-    \centering
-    \caption{The plan: what we decided to explore, and the cost of one run.}
-    \label{tab:plan}
-    \small\begin{tabular}{lll}
-        \toprule
-        What we explore & Values considered & Cost \\
-        \midrule
-        input resolution      & 512, 1024, 1536, native 2048 & 10--35 min / run \\
-        encoder               & U-Net from scratch, ResNet18, ResNet34 & 10--35 min / run \\
-        loss function         & BCE+Dice, +Tversky, +clDice, instance Dice, \texttt{pos\_weight} & 15--30 min / run \\
-        augmentation          & D4 symmetries, photometric jitter, scale jitter & included above \\
-        training paradigm     & pixel-wise U-Net vs.\ YOLOv8 detector & 30 min -- 2.5 h / run \\
-        post-processing       & threshold, closing, min.\ size, confidence gate & 10 min, no training \\
-        \bottomrule
-    \end{tabular}
+  \centering
+  \caption{Hypotheses used to guide the experimental work.}
+  \label{tab:plan}
+  \small\begin{tabular}{L{0.29\linewidth}L{0.31\linewidth}L{0.29\linewidth}}
+    \toprule
+    Hypothesis & Test & Decision criterion \\
+    \midrule
+    Pre-trained features are useful on the limited labelled set.
+      & Compare a U-Net trained from scratch with a ResNet18 encoder.
+      & Retain transfer learning only if validation Dice improves. \\
+    Fragmentation is mainly a loss-function problem.
+      & Introduce Tversky and clDice while keeping the low input resolution.
+      & Retain the specialised loss only if both Dice and PQ improve. \\
+    Thin filaments are lost during downsampling.
+      & Increase the input from 512 to 1024 and then 1536 pixels.
+      & Prefer the scale that improves object recognition at acceptable cost. \\
+    Full-disk context and native detail produce different errors.
+      & Compare resized full frames with native-resolution crops.
+      & Evaluate Dice, PQ and the type of instance errors jointly. \\
+    High-resolution training can satisfy the memory targets.
+      & Replace a physical batch of 2 with two accumulated micro-batches.
+      & Accept the change if quality is retained and measured memory decreases. \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
+During the study, 22 configurations were run. Section~\ref{sec:results} reports only
+the eight numbered runs that provided evidence for the hypotheses above; the
+full-resolution U-Nets and YOLO detector experiments are compared separately in
+Section~\ref{sec:heavy}.
+
+In the first transfer-learning run, the learning rate was also changed, while higher
+input resolutions required different
+memory settings. The results therefore support practical design decisions, but the
+entire score difference cannot always be attributed to one variable.
+
+All final scores are recomputed at the native image resolution, and output parameters
+are selected only on validation data.
+
+In some experiments, the training seed was changed a couple of times while keeping the
+split fixed. The resulting scores remained nearly unchanged, suggesting limited
+variability for the tested configurations.
+
+\subsection{Alternatives not retained}
+
+The main alternatives considered and then rejected were:
+
+\begin{itemize}
+\setlength{\itemsep}{0.1em}
+\item \textbf{Alternative losses:} topology-oriented, soft and instance-balanced variants gave no stable gain.
+\item \textbf{Scale jitter:} inconsistent gains.
+\item \textbf{Post-processing:} detect-then-refine and component merging increased complexity or fusion risk.
+\item \textbf{ResNet34 encoder:} more memory without a Dice gain.
+\item \textbf{Detectors:} higher PQ, lower Dice and higher cost.
+\end{itemize}
+
+These results guided the choice of input scale and final architecture.

@@ -1,69 +1,36 @@
-\section{Dati e protocollo di valutazione}
+\section{Organizzazione dei dati e validazione}
 \label{sec:data}
 
-\subsection{Annotazioni e accordo tra annotatori}
-
-\begin{wrapfigure}{r}{0.31\textwidth}
-    \vspace{-1.4em}
-    \centering
-    \includegraphics[width=0.29\textwidth]{../experiments/13/plots/dataset_examples.png}
-    \caption{Tre osservazioni di training: immagine H-alpha (a sinistra) e maschera
-    binaria di un annotatore (a destra), con il numero di filamenti e la frazione
-    di pixel positivi.}
-    \label{fig:dataset}
-    \vspace{-1.2em}
+\begin{wrapfigure}{r}{0.34\textwidth}
+  \vspace{-1.2em}
+  \centering
+  \includegraphics[width=0.32\textwidth]{figures/dataset_examples_13.png}
+  \caption{Esempi usati per controllare il contrasto delle immagini e la variabilità
+  delle annotazioni.}
+  \label{fig:dataset}
+  \vspace{-1em}
 \end{wrapfigure}
 
-Il training set ha \textbf{707 osservazioni}. Le annotazioni sono COCO, con una
-proprietà strutturale che ha plasmato ogni decisione del progetto: ogni voce è
-\emph{la vista di un singolo annotatore} su un'osservazione, e la stessa immagine
-compare fino a tre volte con poligoni diversi (1154 record in totale, 8199
-filamenti annotati). Le maschere sono disegnate a mano da annotatori umani e quindi
-soggette a omissioni ed errori: non sono una ground truth perfetta. Gli annotatori
-sono genuinamente in disaccordo: sulle 296 osservazioni annotate da più di una
-persona, il Dice medio tra due annotatori della \emph{stessa} immagine è $0{,}62$.
+I dati annotati contengono 707 osservazioni diverse ma 1154 record di annotazione.
+Diverse osservazioni sono state annotate da due o tre esperti. Una suddivisione casuale
+dei singoli record avrebbe quindi potuto assegnare annotazioni della stessa immagine sia
+al training sia alla validazione. In tal caso, il modello sarebbe stato valutato su
+immagini già incontrate durante l'addestramento, con una conseguente sovrastima delle
+prestazioni. Per evitare questa forma di data leakage, ho effettuato lo split a livello
+di file, assegnando tutte le annotazioni della stessa osservazione a un unico insieme.
 
-Quel numero misura il rumore delle etichette, non il massimo ottenibile da un
-modello. Il punteggio confronta la predizione con \emph{ogni} annotatore
-separatamente e poi media, quindi una predizione vicina al consenso paga solo i
-propri errori, mentre un annotatore usato come predittore paga anche le
-idiosincrasie del collega. Lo abbiamo misurato: la maschera di maggioranza degli
-annotatori -- un oracolo, costruito dalle stesse annotazioni contro cui lo
-valutiamo -- ottiene un Dice medio di $\mathbf{0{,}81}$ contro i singoli
-annotatori. Il tetto pratico sta lì, non a $0{,}62$: il modello consegnato arriva a
-$0{,}68$ (Sezione~\ref{sec:results}), sopra l'accordo tra due umani ma con ancora
-$\approx 0{,}13$ di margine, che la Sezione~\ref{sec:error} attribuisce al
-riconoscimento dei filamenti piccoli e non alla precisione dei contorni.
+Lo split finale usa il seed 22 e contiene 601 file di training e 106 di validazione,
+corrispondenti a 985 e 169 record di annotazione. Il test set separato di Kaggle viene
+usato solo dal notebook di inferenza. Le appartenenze esatte sono salvate in
+\texttt{split\_seed22.csv}, quindi il validation set riportato può essere ricostruito.
 
-I filamenti sono inoltre piccoli e rari (Figura~\ref{fig:dataset}): l'istanza
-mediana copre $\approx$1230 pixel e tutte insieme solo lo $0{,}4\%$ dell'immagine,
-il che esclude una cross-entropy pura e rende la risoluzione d'ingresso una
-variabile di prim'ordine.
+Le maschere contengono 8199 poligoni di filamenti e il foreground occupa solo circa lo
+0.4\% di un'immagine. L'area mediana di un'istanza alla risoluzione nativa è di circa
+1230 pixel. Nelle osservazioni con più annotazioni, il Dice medio tra coppie di
+annotatori è circa 0.62. Questo valore non definisce un limite superiore umano, ma mostra
+che alcuni errori apparenti della previsione possono dipendere anche dalle differenze tra
+gli annotatori.
 
-\subsection{Protocollo di split}
-
-Lo split è sui \textbf{nomi dei file, mai sui record di annotazione}: due
-annotatori di un'osservazione descrivono gli stessi pixel, e dividere per record
-farebbe trapelare pixel di validazione nel training gonfiando ogni punteggio. Il
-seed 22 divide le 707 osservazioni in tre blocchi da 494, 106 e 107, salvati in
-\texttt{splits/split\_seed22.csv}. Il terzo era un test interno, mai consultato per
-scegliere alcunché; dal settimo esperimento in poi abbiamo abbandonato lo split
-triplo e lo abbiamo incorporato nel training, dove 107 osservazioni valgono di più.
-Il protocollo effettivo, quello del modello consegnato, è quindi a due vie:
-\textbf{601 osservazioni di training e 106 di validazione}, con il validation set
-come unico strumento di selezione di iper-parametri, checkpoint e operating point.
-
-\subsection{La metrica ufficiale, reimplementata}
-
-La traccia del project work adotta il \textbf{Mean Dice} come punteggio di
-valutazione; la challenge Kaggle valuta la sua leaderboard con la \textbf{Panoptic
-Quality}, quindi teniamo traccia di entrambe. La PQ della challenge differisce dalla
-definizione da manuale della Sezione~\ref{sec:background} in tre punti che cambiano
-tutti l'aspetto di una buona predizione: la ground truth è un'istanza per
-annotazione e non le componenti connesse dell'unione dei poligoni di tutti gli
-annotatori; ogni annotatore è una voce di valutazione separata, quindi una stessa
-predizione viene valutata due o tre volte contro esperti in disaccordo tra loro; e
-TP, FP e FN si accumulano globalmente sull'intero split invece di essere mediati
-per immagine. La pipeline reimplementa esattamente quella definizione e la verifica
-contro il codice pubblicato dagli organizzatori, con un accordo di
-$3\times10^{-8}$.
+La validazione è stata usata per scegliere il checkpoint, confrontare gli esperimenti e
+selezionare le impostazioni finali dell'output. Il riuso dello stesso split può rendere
+ottimistico il punteggio finale; per questo considero con cautela le differenze piccole.

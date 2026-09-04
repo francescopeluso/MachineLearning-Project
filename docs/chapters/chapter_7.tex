@@ -1,91 +1,95 @@
-\section{Error analysis and discussion}
+\section{Error analysis and additional models}
 \label{sec:error}
 
-\subsection{Mask quality and recognition}
+\subsection{Errors of the delivered model}
 
-Across thirteen experiments -- every capacity, resolution and architecture tried --
-the quality of matched masks (SQ) moved inside $0.66$--$0.68$ and no further,
-against a matched-pair agreement between human annotators of $0.59$; Dice too
-passed pairwise annotator agreement ($0.62$) at the second experiment and barely
-moved afterwards. This does not close the boundary question: the consensus oracle
-of Section~\ref{sec:data} sits at $0.81$, so the headroom is real. What it says is
-that \textbf{none of the variables we moved touches it}: capacity, resolution and
-loss change \emph{which} filaments we find, not how well we draw them. Every
-remaining point of PQ goes through recognition: finding more of the filaments
-annotators marked, predicting fewer they did not.
+At the selected operating point, experiment 13 produces 733 matched instances, 845
+false positives and 411 false negatives on validation. Its SQ is 0.667 and its RQ is
+0.539. The difference indicates that recognition errors have a larger effect on PQ than
+the boundaries of already matched objects.
 
-\subsection{False negatives and false positives}
-
-Table~\ref{tab:errors} sorts every error of the delivered model by cause. Instance
-recall falls sharply with size, from $0.31$ below 500 pixels to $0.73$ above 5000:
-what we miss are small, faint filaments. Split and merge errors together are only
-$5.4\%$ of all errors, which is why we never built any split/merge machinery -- the
-prize was too small to be worth the code.
+Recall is strongly related to instance size: it is 0.44 below 500 pixels, 0.65 between
+500 and 1000, and approximately 0.69--0.72 in the larger groups. Small or faint
+filaments are therefore the clearest weakness of the delivered model.
 
 \begin{table}[ht]
-    \centering
-    \caption{Every error of the delivered model on validation, by cause.}
-    \label{tab:errors}
-    \small\begin{tabular}{llrl}
-        \toprule
-        & Cause & Count & What it means \\
-        \midrule
-        \multirow{3}{*}{FN (442)}
-          & pure miss   & 193 & not one predicted pixel on the instance \\
-          & near miss   & 215 & a blob is there, but IoU stays $\le 0.5$ \\
-          & split       & 34  & the filament is found, but in pieces \\
-        \midrule
-        \multirow{3}{*}{FP (523)}
-          & hallucination & 209 & no annotated pixel touched \\
-          & unmatched     & 296 & on an annotated filament, but below IoU $0.5$ \\
-          & merge         & 18  & one prediction covering two annotations \\
-        \bottomrule
-    \end{tabular}
+  \centering
+  \caption{Error categories for experiment 13 on validation.}
+  \label{tab:errors}
+  \small\begin{tabular}{llrl}
+    \toprule
+    & Category & Count & Meaning \\
+    \midrule
+    \multirow{3}{*}{FN (411)}
+      & pure miss & 113 & no predicted overlap \\
+      & near miss & 245 & overlap exists, but IoU $\leq0.5$ \\
+      & split & 53 & one annotation covered by several pieces \\
+    \midrule
+    \multirow{3}{*}{FP (845)}
+      & no-overlap FP & 418 & no annotated pixel is touched \\
+      & unmatched & 411 & overlap exists, but IoU $\leq0.5$ \\
+      & merge & 16 & one prediction overlaps several annotations \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-Two caveats were checked. First, the organisers confirmed the annotations are
-\emph{incomplete}, so part of the hallucinations are plausibly real filaments that
-one or more annotators missed -- measured, blobs peaking above $0.85$ probability
-are marked by only $63\%$ of annotators, and several probability-map blobs in
-Figure~\ref{fig:predictions} sit on structures no annotator drew. Second, the
-matching structure the challenge's judging committee inspects is nearly one-to-one
-(Figure~\ref{fig:distributions}): of 1144 annotated instances 951 are touched by at
-least one prediction and only 81 by more than one.
-
 \begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.86\linewidth]{../experiments/13/plots/validation_predictions.png}
-    \caption{The delivered model on three validation observations: annotator ground
-    truth (left), predicted probability map (centre), final instances at the
-    delivered operating point (right). Several blobs in the probability maps sit on
-    structures no annotator drew.}
-    \label{fig:predictions}
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/validation_predictions_13.png}
+  \caption{Experiment-13 validation examples: annotation, probability map and final
+  connected components. A response outside one annotation can be a false positive or
+  reflect disagreement between annotators.}
+  \label{fig:predictions}
 \end{figure}
 
+The distributions in Figure~\ref{fig:distributions} provide an additional view of the
+same result. Among overlapping ground-truth/prediction pairs, mean IoU is 0.516 and mean
+Dice is 0.648. These pairwise values do not replace the global metrics because they
+exclude components without a match.
 
 \begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.98\linewidth]{../experiments/13/plots/official_distributions.png}
-    \caption{The distributions reported by the organisers' self-evaluation
-    notebook, for the delivered model on validation: IoU and Dice over every
-    overlapping ground-truth/prediction pair, and the many-to-one / one-to-many
-    relations (a hit is any overlap; the metric's IoU $> 0.5$ gate is stricter).}
-    \label{fig:distributions}
+  \centering
+  \includegraphics[width=0.84\linewidth]{figures/official_distributions_13.png}
+  \caption{Pairwise overlaps and matching degrees for experiment 13 on validation.}
+  \label{fig:distributions}
 \end{figure}
 
-\subsection{Maximising PQ for the Kaggle leaderboard}
-\label{sec:kaggle}
+\subsection{Heavier models and the second final candidate}
+\label{sec:heavy}
 
-With the memory bonus deliberately set aside, the recognition problem was pushed as
-far as it would go, and the public leaderboard tracked validation PQ minus a stable
-$0.072 \pm 0.007$ across eight submissions -- validation was a reliable compass
-throughout. Native $2048$ full-frame models (ResNet18 and ResNet34 encoders) match
-the champion; averaging the probability maps of the two \emph{near-equal,
-oppositely-biased, different-scale} models beats both under cross-selection
-(PQ 0.4354), where every other ensembling attempt had failed; and appending the
-confident detections of a YOLOv8x detector wherever the ensemble left pixels free
-adds the filaments the pixel-wise models miss entirely (PQ \textbf{0.4414},
-cross-validated, public leaderboard \textbf{0.37}). These configurations use up to
-9--39~GB in training and are documented here as a study on the Kaggle challenge's
-metric; the model we deliver for the project work remains the budget-compliant
-Dice optimum of Section~\ref{sec:operating}.
+For completeness, Table~\ref{tab:heavy} reports the configurations that explored
+greater capacity or a different balance between Mean Dice and PQ. Memory values are
+measured peaks, not estimates from parameter counts.
+
+\begin{table}[H]
+  \centering
+  \caption{Final candidate and higher-cost configurations. A dash indicates that no
+  separate training or inference peak is applicable or available.}
+  \label{tab:heavy}
+  \small\begin{tabular}{L{0.08\linewidth}L{0.34\linewidth}rrrr}
+    \toprule
+    ID & Configuration & Dice & PQ & Train GB & Test GB \\
+    \midrule
+    13 & ResNet18 U-Net, native crops & \textbf{0.6762} & 0.3591 & 3.04 & 2.53 \\
+    15m & ResNet18 U-Net, full $1536^2$ & 0.6650 & 0.4153 & 2.63 & 2.53 \\
+    U1 & ResNet18 U-Net, full $2048^2$ & 0.6691 & 0.4211 & 9.20 & 4.32 \\
+    U2 & ResNet34 U-Net, full $2048^2$ & 0.6670 & 0.4282 & 9.23 & 4.36 \\
+    Y1 & YOLOv8m-seg, $1792^2$ (40 ep.) & 0.6150 & 0.4170 & 21.59 & -- \\
+    Y2 & YOLOv8m-seg, $1792^2$ (39 ep.) & 0.6181 & 0.4197 & 21.59 & -- \\
+    Y3 & YOLOv8x-seg, $1792^2$ (100 ep.) & 0.6324 & 0.4263 & 38.74 & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+U1 and U2 process the complete native-resolution frame. U2 replaces ResNet18 with
+ResNet34, increasing the trainable parameters from 14.34 to 24.45 million. Their PQ
+improves, but their training peaks exceed 9~GB and Mean Dice remains below experiment
+13.
+
+The YOLO experiments (Y1--Y3) achieved a reasonable PQ but lower Mean Dice than
+experiment 13. The largest model, Y3, reached 0.4263 PQ but required 38.74~GB of training
+memory; the detector branch was therefore not selected.
+
+Experiment 13 requires approximately 107 seconds per epoch and completed 15 epochs in
+26.7 minutes. Inference on 180 test images required about 15.3 minutes. Its measured
+training and inference peaks remain below the optional 5~GB and 4~GB thresholds.

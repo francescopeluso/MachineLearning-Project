@@ -1,49 +1,46 @@
-\section{Background: dense prediction and instance metrics}
+\section{Evaluation criteria}
 \label{sec:background}
 
-\subsection{Dense prediction}
+\subsection{Mean Dice}
 
-A classification CNN answers one question per image: its pooling stages
-progressively discard \emph{where} things are in order to decide \emph{what} the
-image is. Segmentation asks the opposite -- one decision per pixel -- so the
-spatial detail the encoder throws away has to be rebuilt. A decoder of transposed
-convolutions can upsample the bottleneck back to full resolution, but for
-structures a few pixels wide that is not enough: by the bottleneck a thin filament
-has already been pooled out of existence, and no upsampling reinvents it. The
-\textbf{U-Net}~\cite{unet} solves exactly this with skip connections that copy each
-encoder stage into the decoder stage of the same resolution: the fine detail
-travels \emph{around} the bottleneck instead of through it. For dark, thin,
-elongated filaments those skips are not a refinement -- they are why the prediction
-exists at all.
-
-The encoder need not be trained from scratch. Residual networks~\cite{resnet}
-pre-trained on ImageNet~\cite{imagenet} provide general edge and texture filters,
-which matters when the training set is small.
-
-\subsection{Instance metrics}
-
-Two masks $P$ and $G$ are compared by their Intersection over Union or by the
-closely related Dice coefficient,
-%
+For validation record $i$, $\Omega_i=\{1,\ldots,H_i\}\times
+\{1,\ldots,W_i\}$ is the set of pixel coordinates of an image with height $H_i$ and
+width $W_i$, that is, its discrete domain. Let $P_i\subseteq\Omega_i$ be the predicted
+foreground mask and $G_i\subseteq\Omega_i$ the union of its annotated instances. The
+Dice coefficient is
 \begin{equation}
-\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
-\qquad
-\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|},
+D_i=\frac{2|P_i\cap G_i|+\varepsilon}
+{|P_i|+|G_i|+\varepsilon},
 \end{equation}
-%
-both pixel-level measures. \textbf{Panoptic Quality}~\cite{panoptic} instead scores
-objects: predicted and annotated instances are matched when their IoU exceeds
-$0.5$, and
-%
+where $\varepsilon$ avoids division by zero. If both masks are empty, the implementation
+assigns $D_i=1$. Over the $N$ annotator-image records in the validation set, the reported
+metric is
 \begin{equation}
-\mathrm{PQ}
- = \underbrace{\frac{\sum_{\mathrm{TP}} \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
-   \times
-   \underbrace{\frac{|\mathrm{TP}|}
-        {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}},
+\mathrm{Mean\ Dice}=\frac{1}{N}\sum_{i=1}^{N}D_i.
 \end{equation}
-%
-segmentation quality times recognition quality. The factorisation is what makes PQ
-diagnostic: SQ says how well matched masks overlap, RQ how many objects are found
-at all. The two metrics disagree in an informative way -- a fragmented or noisy
-prediction barely moves Dice and destroys RQ.
+This union-mask measure is appropriate for the strong class imbalance because it does
+not reward correctly classified background pixels. However, it does not describe how
+the foreground is divided into separate objects: a filament split into several
+components can still retain substantial pixel overlap.
+
+\subsection{Panoptic Quality}
+
+PQ is therefore used as a complementary instance-level metric. For every
+annotator-image record, predicted and annotated instances are associated when their
+Intersection over Union is greater than 0.5. With this threshold, valid associations are
+one-to-one. True matches and unmatched predicted or annotated instances are accumulated
+over the validation split as TP, FP and FN. The metric is
+\begin{equation}
+\mathrm{PQ}=
+\underbrace{\frac{\sum_{(p,g)\in\mathrm{TP}}\mathrm{IoU}(p,g)}{|\mathrm{TP}|}}_{\mathrm{SQ}}
+\times
+\underbrace{\frac{|\mathrm{TP}|}{|\mathrm{TP}|+\tfrac12|\mathrm{FP}|+\tfrac12|\mathrm{FN}|}}_{\mathrm{RQ}}.
+\end{equation}
+Segmentation Quality (SQ) measures the mean overlap of matched instances, whereas
+Recognition Quality (RQ) penalises missing and spurious instances. The distinction is
+relevant in this study because configurations with similar Mean Dice can produce
+different numbers of fragmented or false-positive components.
+
+The two measures are reported for one explicitly defined operating point at a time. In
+particular, the best Dice from one output configuration is never combined with the best
+PQ from another.

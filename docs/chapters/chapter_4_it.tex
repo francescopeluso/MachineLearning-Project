@@ -1,96 +1,114 @@
-\section{Modello e addestramento}
+\section{Architettura, preprocessing e training}
 \label{sec:method}
 
-\subsection{Architettura}
+\subsection{Architettura della rete}
 
-Il modello è la U-Net della Sezione~\ref{sec:background} con un \textbf{encoder
-ResNet18 pre-addestrato su ImageNet} (Figura~\ref{fig:architectures}): con meno di
-500 osservazioni di training, imparare da zero bordi e texture spreca il budget di
-dati. La testa di classificazione viene scartata e i quattro blocchi convoluzionali
-alimentano il decoder U-Net attraverso le skip connection. Una riscrittura
-algebrica una tantum ripiega lo stem RGB e la normalizzazione ImageNet in una
-convoluzione a canale singolo esattamente equivalente, così le immagini in scala di
-grigi entrano direttamente a un terzo della banda d'ingresso. L'architettura resta
-poi fissa per tutto lo studio: una variabile per esperimento è ciò che rende
-significativi i confronti.
+La rete implementata segue la struttura encoder-decoder della U-Net. Il percorso
+contrattivo estrae caratteristiche progressivamente più astratte riducendone la
+risoluzione spaziale; il percorso espansivo ripristina la risoluzione originale. Le
+skip connection concatenano le feature dell'encoder con quelle del decoder alle scale
+corrispondenti, permettendo di recuperare informazioni di localizzazione che andrebbero
+altrimenti perse durante il downsampling.
 
-Tre alternative sono state considerate e scartate per ragioni dichiarate e
-verificabili. Le \textbf{architetture di instance segmentation} come Mask
-R-CNN~\cite{maskrcnn} ricostruiscono ogni maschera da una griglia $28 \times 28$
-dentro un box allineato agli assi -- un sovracampionamento di $\sim\!25\times$ per
-oggetti la cui proprietà distintiva è essere larghi pochi pixel e lunghi centinaia
--- e filamenti allungati e diagonali producono box sovrapposti e quasi tutti di
-sfondo, il regime peggiore per l'anchor matching. L'affermazione è stata poi
-verificata empiricamente invece di restare sulla carta: un detector
-YOLOv8x-seg~\cite{yolo} addestrato sullo stesso split raggiunge un punteggio a
-istanze competitivo (PQ $0{,}426$) ma un Dice nettamente peggiore ($0{,}632$ contro
-$0{,}68$), confermando la scelta per il punteggio della traccia. \textbf{Encoder più
-grandi e transformer}: in ogni capacità e risoluzione provata la qualità delle
-maschere accoppiate non si è mai mossa (Sezione~\ref{sec:error}), quindi la capacità
-non è il vincolo attivo, mentre il budget di dati sconsiglia modelli più affamati.
-Le \textbf{pipeline non neurali} (sogliatura più morfologia): il contrasto H-alpha
-varia fortemente tra osservazioni, e una regola fotometrica globale non può
-separare i filamenti da macchie solari e oscuramento al bordo.
-
-\begin{figure}[t]
+\begin{figure}[ht]
+  \centering
+  \begin{minipage}[t]{0.48\linewidth}
     \centering
-    \begin{minipage}[c]{0.46\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/unet_architecture.png}
-    \end{minipage}\hfill
-    \begin{minipage}[c]{0.50\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}
-    \end{minipage}
-    \caption{A sinistra: l'encoder--decoder U-Net con le skip connection. A destra:
-    l'encoder ResNet18 che sostituisce quello da zero; la testa di classificazione
-    viene scartata e i quattro blocchi convoluzionali alimentano il decoder U-Net.}
-    \label{fig:architectures}
+    \includegraphics[width=\linewidth]{figures/unet_architecture.png}\\[-0.2em]
+    {\small\textbf{(a) U-Net:} encoder, decoder e skip connection multiscala.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/resnet18_architecture.png}\\[-0.2em]
+    {\small\textbf{(b) ResNet18:} gerarchia delle feature residue e teste di
+    classificazione originali.}
+  \end{minipage}
+  \caption{Schemi di riferimento delle due componenti combinate nel modello implementato.}
+  \label{fig:architectures}
 \end{figure}
 
-\subsection{Loss, ottimizzazione e implementazione}
+Una ResNet18 pre-addestrata su ImageNet sostituisce l'encoder originale della U-Net. I
+blocchi residui apprendono una trasformazione $F(x)$ e sommano la connessione identità,
+producendo $F(x)+x$; questa struttura facilita la propagazione del gradiente
+nell'estrattore di feature. Vengono mantenuti soltanto lo stem convoluzionale e i quattro
+stadi residui. Il flattening e le teste di classificazione mostrate nella
+Figura~\ref{fig:architectures}(b) sono rimossi, mentre le feature con 64, 128, 256 e 512
+canali vengono fornite al decoder della U-Net.
 
-La loss è una combinazione a pesi uguali di binary cross-entropy e soft
-Dice~\cite{vnet}: il Dice è immune al tasso di positivi dello $0{,}4\%$ ma non dice
-nulla sulla confidenza, mentre la BCE mantiene le probabilità \emph{calibrate},
-ciò che rende ben condizionata la ricerca della soglia della
-Sezione~\ref{sec:operating} -- l'esperimento 3 mostra cosa succede quando quella
-calibrazione si perde. L'augmentation usa le otto simmetrie del quadrato, che
-preservano l'etichetta perché i filamenti non hanno orientamento canonico, più
-jitter fotometrico per il contrasto H-alpha variabile. L'ottimizzazione è
-AdamW~\cite{adamw}, batch size 2, al più 20 epoche, con early stopping sul Dice di
-validazione. Il checkpoint si sceglie sul \textbf{Dice}, non sulla PQ: la PQ dipende
-fortemente da soglia e post-processing, regolati dopo sullo stesso validation set,
-quindi selezionare i pesi con essa ottimizzerebbe due quantità accoppiate in un
-colpo solo.
+Gli schemi riportati sono generali. Nella rete implementata, la prima convoluzione di
+ResNet18 è adattata da tre canali RGB a un singolo canale in scala di grigi combinando i
+pesi pre-addestrati. Il decoder termina con una convoluzione $1\times1$ che restituisce
+un logit di foreground per pixel. La rete completa contiene 14.34 milioni di parametri
+addestrabili.
 
-Due scelte implementative rendono sostenibile lo studio. Immagini e maschere sono
-decodificate \emph{una sola volta} in cache uint8 mappate in memoria -- tutta la
-ground truth a $1024^2$ occupa 150~MB invece di 1,2~GB -- così un'epoca legge solo
-byte invece di decodificare JPEG e rasterizzare poligoni. L'addestramento gira in
-precisione mista con gradient checkpointing alle risoluzioni più alte, e il picco
-di memoria GPU è \emph{misurato} allo step che davvero raggiunge il massimo, mai
-stimato dal numero di parametri.
+\subsection{Pipeline di input e inferenza}
 
-\begin{table}[ht]
-    \centering
-    \caption{Costo misurato della pipeline consegnata. Addestramento e ricerca
-    dell'operating point girano su GPU Colab; l'inferenza è stata eseguita anche
-    su GPU di un portatile. Entrambi i notebook girano senza modifiche in Colab e
-    Kaggle, come richiede la traccia.}
-    \label{tab:cost}
-    \small\begin{tabular}{lr}
-        \toprule
-        Passo & Costo \\
-        \midrule
-        Addestramento, un'epoca (601 finestre da $1536^2$)      & 105 s \\
-        Addestramento completo (19 epoche, early stopping)      & 33 min \\
-        Ricerca dell'operating point (1437 combinazioni a $2048^2$) & 10 min \\
-        Inferenza sulle 180 immagini di test, con TTA D4        & 14 min \\
-        \midrule
-        Picco di memoria GPU in training (soglia bonus 5~GB)    & \textbf{3,04 GB} \\
-        Picco di memoria GPU in inferenza (soglia bonus 4~GB)   & \textbf{2,50 GB} \\
-        \bottomrule
-    \end{tabular}
-\end{table}
+L'esperimento selezionato conserva il campionamento nativo a $2048^2$. Durante il
+training viene estratto un crop casuale a $1536^2$ da ogni frame. Durante l'inferenza,
+quattro tile sovrapposti a $1536^2$ coprono l'intera immagine; le rispettive mappe di
+probabilità vengono fuse prima del thresholding. La procedura mantiene il dettaglio dei
+pixel nativi limitando la memoria richiesta da ogni passaggio forward.
 
+\begin{center}
+\small
+\fbox{frame nativo in scala di grigi}
+$\longrightarrow$ \fbox{crop di training / quattro tile di inferenza}
+$\longrightarrow$ \fbox{U-Net ResNet18}\\[0.35em]
+$\longrightarrow$ \fbox{probabilità fuse a $2048^2$}
+$\longrightarrow$ \fbox{componenti}
+$\longrightarrow$ \fbox{submission RLE}
+\end{center}
+
+Immagini e maschere vengono decodificate una sola volta in file uint8 mappati in memoria.
+La cache evita di ripetere a ogni epoca la decodifica JPEG e la rasterizzazione dei
+poligoni senza conservare l'intero dataset in RAM. Contiene soltanto campioni non
+modificati; l'augmentation viene generata in modo indipendente a ogni epoca. Durante il
+training applico un crop casuale $1536^2$, riflessioni orizzontali e verticali (con
+probabilità 0.5), una rotazione casuale di $0$, $90$, $180$ o $270$ gradi e variazioni
+fotometriche. In particolare, luminosità e contrasto variano entro il $pm20\%$ e nel
+30\% dei casi viene aggiunto rumore gaussiano. Le trasformazioni geometriche sono
+applicate contemporaneamente all'immagine e alla maschera.
+
+\subsection{Ottimizzazione}
+
+Per un singolo campione, sia $z_j$ il logit nel pixel $j$, $p_j=\sigma(z_j)$ la relativa
+probabilità di foreground e $y_j\in\{0,1\}$ il target, considerando $M$ pixel. I termini
+della loss sono i seguenti:
+
+\begin{itemize}
+\item \textbf{Binary Cross-Entropy (BCE):} valuta la differenza tra la probabilità
+  prevista e il target per ogni pixel. Fornisce quindi una supervisione locale, pixel
+  per pixel.
+\item \textbf{Soft Dice loss:} misura la sovrapposizione tra la maschera prevista e
+  quella reale. Risulta utile in presenza di forte sbilanciamento tra foreground e
+  sfondo, perché considera direttamente l'area delle due regioni.
+\item \textbf{Loss complessiva:} è la media dei due termini, con peso 0.5 per ciascuno.
+\end{itemize}
+
+Le definizioni utilizzate sono
+\begin{equation}
+\begin{aligned}
+\mathcal{L}_{\mathrm{BCE}}
+  &= -\frac{1}{M}\sum_{j=1}^{M}\left[y_j\log(p_j)+(1-y_j)\log(1-p_j)\right],\\
+\mathcal{L}_{\mathrm{Dice}}
+  &= 1-\frac{2\sum_{j=1}^{M}p_jy_j+\varepsilon}
+  {\sum_{j=1}^{M}p_j+\sum_{j=1}^{M}y_j+\varepsilon},\quad \varepsilon=10^{-6},\\
+\mathcal{L} &= 0.5\,\mathcal{L}_{\mathrm{BCE}}+0.5\,\mathcal{L}_{\mathrm{Dice}}.
+\end{aligned}
+\end{equation}
+La costante di stabilizzazione $\varepsilon$ evita un denominatore nullo; entrambi i
+termini vengono mediati sul mini-batch.
+Nell'esperimento 13 non viene usato un peso per la classe positiva. AdamW è configurato
+con learning rate $10^{-4}$, weight decay $10^{-4}$ e cosine decay per un massimo di 20
+epoche. La selezione del checkpoint e l'early stopping si basano sul Dice di validazione;
+il checkpoint salvato corrisponde all'epoca \finalepoch.
+
+Il batch size effettivo è 2. Viene elaborato un crop alla volta e i gradienti sono
+accumulati su due passaggi forward/backward. Sono inoltre attivi gradient checkpointing
+e mixed precision in bfloat16. Il training si è interrotto dopo 15 epoche e ha richiesto
+un picco di \finaltrainmemory{}; l'inferenza ha richiesto \finaltestmemory{}.
+
+Infine, la mappa di probabilità viene convertita in componenti connesse usando
+l'operating point selezionato sulla validazione. I valori finali e la distinzione tra
+configurazioni orientate al Dice e alla PQ sono riportati nella
+Sezione~\ref{sec:results}.

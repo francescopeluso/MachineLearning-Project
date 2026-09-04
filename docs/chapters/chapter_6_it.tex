@@ -1,129 +1,105 @@
-\section{Risultati sperimentali}
+\section{Evidenze sperimentali e scelta del modello}
 \label{sec:results}
 
-\subsection{Esperimenti principali}
+La Tabella~\ref{tab:experiments} riporta le otto configurazioni numerate che hanno
+modificato più direttamente una scelta progettuale. I valori contrassegnati da un
+asterisco appartengono al protocollo iniziale, in cui la probabilità di foreground viene
+convertita in maschera usando la soglia 0.5; i rimanenti sono stati
+ricalcolati alla risoluzione nativa secondo l'obiettivo di validazione indicato.
 
-Sono stati eseguiti quindici run; i sei che hanno cambiato la rotta del progetto
-sono nella Tabella~\ref{tab:experiments}.
-
-\begin{table}[ht]
-    \centering
-    \caption{Gli esperimenti principali. Dice e PQ all'operating point di ciascun
-    run, metrica ufficiale a $2048^2$ nativo; i primi tre precedono quel protocollo
-    e sono riportati a soglia $0{,}5$ (contrassegnati *).}
-    \label{tab:experiments}
-    \small\begin{tabular}{clrrl}
-        \toprule
-        Esp. & Una variabile & Dice & PQ & Esito \\
-        \midrule
-        1 & U-Net da zero, $512^2$                 & 0,6415* & --      & baseline \\
-        2 & encoder ResNet18 ImageNet              & 0,6552* & 0,2505* & calibrazione, +1 pt Dice \\
-        3 & loss topologica (Tversky + clDice)     & 0,4937* & 0,0618* & \textbf{falsificato}, istruttivo \\
-        5 & risoluzione $512 \to 1024$             & 0,6665  & 0,4022  & il guadagno singolo maggiore \\
-        8 & $\to 1536$, TTA D4, gate di confidenza & 0,6729  & \textbf{0,4264} & miglior PQ (singolo) \\
-        13 & 2048 nativo, finestre casuali 1536    & \textbf{0,6815} & 0,3930 & miglior Dice -- \textbf{consegnato} \\
-        \bottomrule
-    \end{tabular}
+\begin{table}[H]
+  \centering
+  \caption{Esperimenti numerati mantenuti nel percorso decisionale.}
+  \label{tab:experiments}
+  \small\begin{tabular}{clrrl}
+    \toprule
+    Esp. & Confronto principale & Dice & PQ & Evidenza ottenuta \\
+    \midrule
+    1 & U-Net da zero, $512^2$ & 0.6415* & -- & baseline di riferimento \\
+    2 & encoder ResNet18 pre-addestrato & 0.6552* & 0.2505* & transfer utile \\
+    3 & Tversky + clDice, $512^2$ & 0.4937* & 0.0618* & ipotesi sulla loss respinta \\
+    5 & risoluzione $512\to1024$ & 0.6665 & 0.4022 & importanza della scala \\
+    8 & immagine intera a $1536^2$ & 0.6678 & \textbf{0.4264} & buona PQ del singolo modello \\
+    13 & immagine nativa, crop $1536^2$ & \textbf{0.6762} & 0.3591 & Mean Dice più alto \\
+    15 & $1536^2$, BCE pesata, batch 2 & 0.6769 & 0.4198 & qualità, ma 5.20~GB \\
+    15m & exp. 15 con controllo memoria & 0.6650 & 0.4153 & alternativa entro i limiti \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-\textbf{Baseline e transfer (1--2).} La U-Net da zero arriva a Dice 0,6415
-all'ultima epoca, ancora in underfitting, con la soglia migliore al bordo della
-griglia di ricerca: probabilità mal calibrate che puntano all'encoder. L'encoder
-pre-addestrato aggiunge un punto di Dice e, cosa più utile, appiattisce la curva
-soglia--Dice: per una configurazione di inferenza da congelare prima di vedere il
-test set, la calibrazione vale più del punto.
+\subsection{Dalla baseline alla risoluzione spaziale}
 
-\textbf{Il fallimento istruttivo (3).} Sostituire metà della loss con Tversky
-orientata al recall~\cite{tversky} più clDice~\cite{cldice} fa crollare la
-validazione a Dice 0,49 e PQ 0,06 mentre la training loss scende: il modello
-ottimizza con successo la cosa sbagliata. L'autopsia conta più del numero: a
-$512^2$ molti filamenti sono larghi uno o due pixel, quindi lo scheletro soft che
-clDice richiede è rumore proprio sulle strutture che doveva proteggere. Un problema
-di \emph{scala} travestito da problema di loss, e la ragione per cui esiste
-l'esperimento 5.
+I passaggi principali sono riassunti di seguito:
 
-\textbf{Risoluzione (5, 8).} Non cambia nulla tranne la dimensione dell'input,
-$512 \to 1024$: il Dice guadagna un punto mentre la PQ salta del $+28\%$ relativo.
-L'asimmetria è la scoperta: la risoluzione cambia poco quanta parte del disco è
-coperta correttamente, e moltissimo quanti filamenti esistono come oggetti
-riconoscibili. Proseguendo a $1536$ con la media sulle otto simmetrie del quadrato
-e un gate di confidenza si ottiene il miglior punteggio a istanze dello studio.
-
-\textbf{Pixel nativi (13).} Addestrare su finestre casuali $1536^2$ del frame
-$2048^2$ intatto rimuove l'ultimo ridimensionamento dalla pipeline. \emph{Perde}
-sul riconoscimento -- le finestre rinunciano al contesto dell'intero disco -- e
-\emph{vince} sulla qualità delle maschere: Dice \textbf{0,6815}, il massimo dello
-studio, con training a 3,04~GB e inferenza a 2,50~GB, l'unica configurazione dentro
-il bonus memoria su entrambi i fronti (Figura~\ref{fig:curves}).
-
-\textbf{Misurati e respinti.} Altri nove run a variabile singola e una dozzina di
-meccanismi post-hoc sono stati falsificati, ognuno col suo numero: scale jitter
-($-0{,}019$ PQ), una cascata detect-then-refine ($-0{,}025$), target di consenso
-soft ($-0{,}033$), clDice ritestata a $1536$ dove la sua premessa era finalmente
-valida ($-0{,}013$), il Dice bilanciato per istanza come termine dominante (il
-controllo dei falsi positivi è collassato), un peso sulla classe positiva nella BCE
-(ha curato la sotto-segmentazione misurata pagandola in allucinazioni), soglie e
-dilatazioni per componente, e tre varianti di ricucitura post-hoc dei filamenti i
-cui guadagni aggregati sono morti in cross-selection.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.72\linewidth]{../experiments/13/plots/training_curves.png}
-    \caption{Il modello consegnato (esperimento 13) in addestramento: loss e
-    metriche a soglia 0,5. L'operating point viene scelto dopo.}
-    \label{fig:curves}
-\end{figure}
-
-\subsection{Post-processing e operating point}
-\label{sec:operating}
-
-La rete emette una probabilità per pixel. Trasformare quella mappa nelle istanze
-finali richiede quattro \emph{iper-parametri di post-processing} -- insieme formano
-l'\emph{operating point}, selezionato con una ricerca a griglia congiunta sul
-validation set (mai sul test set) perché i quattro interagiscono:
-
-\begin{itemize}\itemsep0pt
-    \item \textbf{soglia} ($0{,}50$ nella configurazione consegnata): un pixel con
-          probabilità superiore diventa filamento, sotto diventa background;
-    \item \textbf{chiusura morfologica} ($1$ iterazione): riempie le discontinuità
-          di un pixel, così un filamento spezzato in due dalla rete torna una
-          componente sola -- due falsi positivi e un falso negativo diventano un
-          unico vero positivo;
-    \item \textbf{dimensione minima di componente} ($384$ pixel a $2048^2$): una
-          componente connessa più piccola viene scartata per intero, perché ogni
-          piccolo blob spurio costa un falso positivo pieno in PQ aggiungendo quasi
-          nulla al Dice;
-    \item \textbf{gate di confidenza} ($0{,}90$): una componente sopravvive solo se
-          almeno un suo pixel supera questa probabilità. La soglia da sola svolge
-          due ruoli insieme -- decidere \emph{quali} componenti esistono e la loro
-          \emph{estensione} -- quindi alzarla per eliminare i blob deboli
-          assottiglia anche ogni filamento vero; il gate si prende la decisione di
-          esistenza e lascia le forme esattamente come le ha disegnate la soglia.
+\begin{itemize}
+\setlength{\itemsep}{0.15em}
+\item \textbf{Esperimenti 1--2:} l'encoder ResNet18 pre-addestrato ha fornito un punto di partenza migliore dell'inizializzazione casuale.
+\item \textbf{Esperimento 3:} Tversky+clDice ha ridotto entrambe le metriche a $512^2$; la frammentazione è stata quindi ricondotta soprattutto alla scala spaziale.
+\item \textbf{Esperimenti 5 e 8:} aumentare l'input a $1024^2$ e $1536^2$ ha migliorato la PQ più delle loss specializzate, motivando il ritorno a BCE+Dice.
 \end{itemize}
 
-\begin{wrapfigure}{r}{0.42\textwidth}
-    \vspace{-1.2em}
-    \centering
-    \includegraphics[width=0.40\textwidth]{../experiments/13/plots/threshold_search.png}
-    \caption{Dice e PQ di validazione al variare della soglia per il modello
-    consegnato, senza post-processing: le due metriche hanno massimi diversi.}
-    \label{fig:threshold}
-    \vspace{-1em}
-\end{wrapfigure}
+\subsection{Candidati finali}
 
-Tutto viene valutato a $2048^2$ nativo, perché è lì che si scrive la submission:
-una dimensione minima regolata alla risoluzione di addestramento significa altro a
-scala nativa, e il numero di componenti connesse non è preservato dal
-ridimensionamento di una maschera. Misurato quando questo protocollo fu introdotto,
-selezionare a risoluzione nativa contro la definizione ufficiale valse $+0{,}020$
-Dice e $+0{,}006$ PQ rispetto alla configurazione che sarebbe altrimenti partita --
-gratis, senza riaddestrare.
+L'esperimento 13 ha eliminato il ridimensionamento dell'intero frame e ha usato crop a
+$1536^2$ estratti dalle immagini native a $2048^2$. Ha ottenuto il Mean Dice più alto,
+pari a 0.6762, mantenendosi sotto i limiti facoltativi di memoria. Costituisce quindi il
+modello selezionato per la consegna.
 
-La stessa griglia di ricerca produce un punto per obiettivo. La
-\textbf{configurazione consegnata} è congelata sul Dice, il punteggio della
-traccia: soglia $0{,}50$, chiusura $1$, dimensione minima $384$, gate $0{,}90$, per
-\textbf{Dice 0,6815} (PQ 0,393) in validazione. La cross-selection quantifica il
-costo della griglia più fine in $0{,}0024$, con entrambe le metà del validation set
-che selezionano la stessa soglia e lo stesso gate. Il punto PQ-ottimale dello
-stesso modello (0,407) e dello studio (0,4264, esperimento 8) restano registrati
-negli artefatti.
+Gli esperimenti 15 e 15m rispondono a una domanda diversa. La BCE pesata applicata
+all'intero frame ridimensionato ha ridotto le istanze spurie e aumentato la PQ.
+L'esperimento 15 ha richiesto 5.20~GB durante il training; 15m ha riprodotto l'approccio
+con gradient accumulation, checkpointing e mixed precision, riducendo il picco a
+2.63~GB. Rispetto all'esperimento 13, 15m guadagna 0.0562 di PQ ma perde 0.0112 di Mean
+Dice. Poiché il Mean Dice è la metrica principale del project work, 15m viene
+documentato come secondo candidato finale ma non è usato come modello consegnato. La sua
+submission orientata alla PQ ha ottenuto 0.35 sulla leaderboard pubblica di Kaggle.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.72\linewidth]{figures/training_curves_13.png}
+  \caption{Andamento del training dell'esperimento 13. Il checkpoint selezionato sul
+  Mean Dice corrisponde all'epoca 12; l'operating point finale viene scelto
+  successivamente sulle probabilità di validazione.}
+  \label{fig:curves}
+\end{figure}
+
+\subsection{Selezione dell'operating point}
+\label{sec:operating}
+
+La rete dell'esperimento 13 restituisce una probabilità per pixel. Soglia, chiusura
+morfologica, dimensione minima delle componenti e filtro di confidenza sono stati
+cercati congiuntamente alla risoluzione nativa. La procedura orientata al Dice è riportata
+nella Tabella~\ref{tab:recipe}.
+
+\begin{table}[ht]
+  \centering
+  \caption{Procedura di inferenza del modello consegnato.}
+  \label{tab:recipe}
+  \small\begin{tabular}{ll}
+    \toprule
+    Impostazione & Valore selezionato \\
+    \midrule
+    checkpoint & esperimento 13, epoca 12 \\
+    soglia di probabilità & 0.30 \\
+    iterazioni di closing & 0 \\
+    dimensione minima & 128 pixel a $2048^2$ \\
+    filtro di confidenza & disabilitato \\
+    \midrule
+    Mean Dice di validazione & \textbf{\finaldice} \\
+    PQ allo stesso operating point & \finalpq \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.52\linewidth]{figures/threshold_search_13.png}
+  \caption{Mean Dice e PQ di validazione favoriscono impostazioni di output diverse
+  per l'esperimento 13.}
+  \label{fig:threshold}
+\end{figure}
+
+Il grafico mostra perché è necessario dichiarare l'obiettivo di selezione. Una maggiore
+selettività sulle componenti può aumentare la PQ riducendo però la sovrapposizione della
+maschera unita. I valori di Dice e PQ riportati fanno quindi sempre riferimento alla
+stessa configurazione congelata.

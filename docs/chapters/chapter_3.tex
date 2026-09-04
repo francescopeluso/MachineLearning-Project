@@ -1,70 +1,34 @@
-\section{Data and evaluation protocol}
+\section{Data organisation and validation}
 \label{sec:data}
 
-\subsection{Annotations and inter-annotator agreement}
-
-\begin{wrapfigure}{r}{0.31\textwidth}
-    \vspace{-1.4em}
-    \centering
-    \includegraphics[width=0.29\textwidth]{../experiments/13/plots/dataset_examples.png}
-    \caption{Three training observations: H-alpha image (left) and one annotator's
-    binary mask (right), with the filament count and the fraction of positive
-    pixels.}
-    \label{fig:dataset}
-    \vspace{-1.2em}
+\begin{wrapfigure}{r}{0.34\textwidth}
+  \vspace{-1.2em}
+  \centering
+  \includegraphics[width=0.32\textwidth]{figures/dataset_examples_13.png}
+  \caption{Examples used to inspect image contrast and annotation variability.}
+  \label{fig:dataset}
+  \vspace{-1em}
 \end{wrapfigure}
 
-The training set has \textbf{707 observations}. The annotations are COCO, with one
-structural property that shaped every decision in this project: each entry is
-\emph{one annotator's view} of one observation, and the same image appears up to
-three times with different polygons (1154 annotator records in total, 8199
-annotated filaments). The masks are drawn by hand by human annotators and are
-therefore subject to omissions and errors -- this is not a perfect ground truth.
-The annotators genuinely disagree: over the 296 observations traced by more than
-one person, the mean Dice between two annotators of the \emph{same} image is
-$0.62$.
+The labelled data contain 707 different observations but 1154 annotation records.
+Several observations were annotated by two or three experts. Randomly splitting the
+individual records could therefore assign annotations of the same image to both training
+and validation. In that case, the model would be evaluated on images already seen during
+training, leading to an overestimate of its performance. To prevent this form of data
+leakage, I performed the split at file level and assigned all annotations of the same
+observation to a single subset.
 
-That number measures label noise, not the maximum a model can reach. The score
-compares the prediction against \emph{each} annotator separately and then averages,
-so a prediction close to the consensus only pays for its own errors, while an
-annotator used as a predictor also pays for a colleague's idiosyncrasies. We
-measured it: the majority-vote mask of the annotators -- an oracle, built from the
-very annotations it is scored against -- reaches a mean Dice of $\mathbf{0.81}$
-against the individual annotators. The practical ceiling is there, not at $0.62$:
-the delivered model reaches $0.68$ (Section~\ref{sec:results}), above the agreement
-between two humans but still $\approx 0.13$ short, a gap that
-Section~\ref{sec:error} attributes to recognition of small filaments rather than to
-boundary precision.
+The final split uses seed 22 and contains 601 training files and 106 validation files,
+corresponding to 985 and 169 annotation records. The separate Kaggle test set is used
+only by the inference notebook. The exact membership is stored in
+\texttt{split\_seed22.csv}, so the reported validation set can be reconstructed.
 
-Filaments are also small and rare (Figure~\ref{fig:dataset}): the median instance
-covers $\approx$1230 pixels and all of them together only $0.4\%$ of the image,
-which rules out a plain cross-entropy loss and makes input resolution a
-first-class variable.
+The masks contain 8199 filament polygons and foreground covers only about 0.4\% of an
+image. The median native instance area is roughly 1230 pixels. On observations with
+multiple annotations, mean pairwise Dice is about 0.62. This does not define a human
+upper bound, but it shows that some apparent prediction errors may also reflect
+differences between annotators.
 
-\subsection{Split protocol}
-
-The split is on \textbf{file names, never on annotation records}: two annotators of
-one observation describe the same pixels, and splitting on records would leak
-validation pixels into training and inflate every score. Seed 22 divides the 707
-observations into three blocks of 494, 106 and 107, written to
-\texttt{splits/split\_seed22.csv}. The third one was an internal test set, never
-consulted to choose anything; from the seventh experiment on we dropped the
-three-way split and folded it into training, where 107 observations are worth more.
-The protocol actually used, and the one behind the delivered model, is therefore
-two-way: \textbf{601 training and 106 validation observations}, with the validation
-set as the only instrument for selecting hyperparameters, checkpoints and the
-operating point.
-
-\subsection{The official metric, re-implemented}
-
-The project work assignment adopts the \textbf{Mean Dice} as its evaluation score;
-the Kaggle challenge scores its leaderboard with \textbf{Panoptic Quality}, so we
-track and report both. The challenge's PQ differs from the textbook definition of
-Section~\ref{sec:background} in three ways that all change what a good prediction
-looks like: ground truth is one instance per annotation rather than connected
-components of the union of every annotator's polygons; each annotator is a separate
-evaluation entry, so one prediction is scored two or three times against experts
-who disagree with each other; and TP, FP and FN accumulate globally over the split
-instead of being averaged per image. The pipeline re-implements exactly that
-definition and verifies it against the organisers' published code, agreeing to
-$3\times10^{-8}$.
+Validation was used for checkpoint selection, comparison between experiments and final
+output settings. Reusing one split in this way can make the final score optimistic, so
+small differences are treated with caution.

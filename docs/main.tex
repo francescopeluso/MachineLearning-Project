@@ -9,6 +9,8 @@
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{multirow}
+\usepackage{array}
+\usepackage{float}
 \usepackage{caption}
 \usepackage[hidelinks]{hyperref}
 \usepackage{titlesec}
@@ -17,6 +19,7 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.35em}
 \captionsetup{font=small}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 % Tighter headings: at 12pt the defaults spend a lot of vertical space.
 \titlespacing*{\section}{0pt}{1.1em}{0.5em}
@@ -32,10 +35,16 @@
 
 \newcommand{\university}{University of Salerno}
 \newcommand{\degreecourse}{MSc in Computer Engineering\\Department of Information and Electrical Engineering and Applied Mathematics (DIEM)}
-\newcommand{\reporttitle}{A Convolutional Model for Solar Filament Segmentation in H-alpha Images}
+\newcommand{\reporttitle}{Solar Filament Image Segmentation\\Using a U-Net Architecture}
 \newcommand{\teamname}{2026\_MLrec\_gr02}
 \newcommand{\members}{Francesco Peluso \quad \texttt{IE22700088}}
 \newcommand{\academicyear}{2025/2026}
+\newcommand{\finalexperiment}{13}
+\newcommand{\finalepoch}{12}
+\newcommand{\finaldice}{0.6762}
+\newcommand{\finalpq}{0.3591}
+\newcommand{\finaltrainmemory}{3.04~GB}
+\newcommand{\finaltestmemory}{2.53~GB}
 
 \begin{document}
 \pagenumbering{gobble}
@@ -74,34 +83,6 @@
 \input{chapters/chapter_7}
 \input{chapters/chapter_8}
 
-\begin{thebibliography}{99}\small
-\setlength{\itemsep}{1pt}
-\bibitem{unet} O.~Ronneberger, P.~Fischer, T.~Brox.
-  \emph{U-Net: Convolutional Networks for Biomedical Image Segmentation}. MICCAI, 2015.
-\bibitem{resnet} K.~He, X.~Zhang, S.~Ren, J.~Sun.
-  \emph{Deep Residual Learning for Image Recognition}. CVPR, 2016.
-\bibitem{imagenet} J.~Deng et al.
-  \emph{ImageNet: A Large-Scale Hierarchical Image Database}. CVPR, 2009.
-\bibitem{panoptic} A.~Kirillov, K.~He, R.~Girshick, C.~Rother, P.~Doll\'ar.
-  \emph{Panoptic Segmentation}. CVPR, 2019.
-\bibitem{vnet} F.~Milletari, N.~Navab, S.-A.~Ahmadi.
-  \emph{V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image
-  Segmentation}. 3DV, 2016.
-\bibitem{tversky} S.~S.~M.~Salehi, D.~Erdogmus, A.~Gholipour.
-  \emph{Tversky Loss Function for Image Segmentation Using 3D Fully Convolutional
-  Deep Networks}. MLMI, 2017.
-\bibitem{cldice} S.~Shit et al.
-  \emph{clDice: A Novel Topology-Preserving Loss Function for Tubular Structure
-  Segmentation}. CVPR, 2021.
-\bibitem{maskrcnn} K.~He, G.~Gkioxari, P.~Doll\'ar, R.~Girshick.
-  \emph{Mask R-CNN}. ICCV, 2017.
-\bibitem{adamw} I.~Loshchilov, F.~Hutter.
-  \emph{Decoupled Weight Decay Regularization}. ICLR, 2019.
-\bibitem{yolo} G.~Jocher, A.~Chaurasia, J.~Qiu.
-  \emph{Ultralytics YOLOv8}. 2023. \url{https://github.com/ultralytics/ultralytics}
-\bibitem{kaggle} \emph{Filament Segmentation Challenge 2026}, with the MAGFiLO~v1.0
-  annotation catalogue. Kaggle, 2026.
-  \url{https://www.kaggle.com/competitions/filament-segmentation-2026}
-\end{thebibliography}
+
 
 \end{document}

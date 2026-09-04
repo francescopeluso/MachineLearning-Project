@@ -1,96 +1,96 @@
-\section{Analisi dell'errore e discussione}
+\section{Analisi degli errori e modelli aggiuntivi}
 \label{sec:error}
 
-\subsection{Qualità delle maschere e riconoscimento}
+\subsection{Errori del modello consegnato}
 
-In tredici esperimenti -- ogni capacità, risoluzione e architettura provata -- la
-qualità delle maschere accoppiate (SQ) si è mossa dentro $0{,}66$--$0{,}68$ e non
-oltre, contro un accordo tra coppie di annotatori umani di $0{,}59$; anche il Dice
-ha superato l'accordo tra due annotatori ($0{,}62$) già al secondo esperimento e da
-lì si è mosso poco. Questo non chiude il problema dei contorni: l'oracolo di
-consenso della Sezione~\ref{sec:data} vale $0{,}81$, quindi il margine esiste. Dice
-però che \textbf{nessuna delle variabili che abbiamo mosso lo tocca}: capacità,
-risoluzione e loss cambiano \emph{quali} filamenti troviamo, non quanto bene li
-disegniamo. Ogni punto di PQ rimanente passa dal riconoscimento: trovare più
-filamenti tra quelli marcati dagli annotatori, predirne meno tra quelli non
-marcati.
+All'operating point selezionato, l'esperimento 13 produce sulla validazione 733 istanze
+associate, 845 falsi positivi e 411 falsi negativi. La SQ è 0.667 e la RQ è 0.539. La
+differenza indica che gli errori di riconoscimento hanno un effetto sulla PQ maggiore
+rispetto ai bordi degli oggetti già associati.
 
-\subsection{Falsi negativi e falsi positivi}
-
-La Tabella~\ref{tab:errors} ordina per causa tutti gli errori del modello
-consegnato. Il recall per istanza crolla con la dimensione, da $0{,}31$ sotto i 500
-pixel a $0{,}73$ sopra i 5000: quello che manchiamo sono filamenti piccoli e
-deboli. Split e merge insieme valgono solo il $5{,}4\%$ di tutti gli errori, ed è
-per questo che non abbiamo mai costruito nessun meccanismo di split/merge: il
-premio era troppo piccolo per giustificare il codice.
+Il recall dipende fortemente dalla dimensione delle istanze: è pari a 0.44 sotto i 500
+pixel, 0.65 tra 500 e 1000 e circa 0.69--0.72 nei gruppi più grandi. I filamenti piccoli
+o deboli costituiscono quindi il limite più evidente del modello consegnato.
 
 \begin{table}[ht]
-    \centering
-    \caption{Tutti gli errori del modello consegnato in validazione, per causa.}
-    \label{tab:errors}
-    \small\begin{tabular}{llrl}
-        \toprule
-        & Causa & Conteggio & Cosa significa \\
-        \midrule
-        \multirow{3}{*}{FN (442)}
-          & pure miss   & 193 & nemmeno un pixel predetto sull'istanza \\
-          & near miss   & 215 & il blob c'è, ma la IoU resta $\le 0{,}5$ \\
-          & split       & 34  & il filamento è trovato, ma a pezzi \\
-        \midrule
-        \multirow{3}{*}{FP (523)}
-          & allucinazione & 209 & nessun pixel annotato toccato \\
-          & non accoppiato & 296 & su un filamento annotato, ma sotto IoU $0{,}5$ \\
-          & merge          & 18  & una predizione che copre due annotazioni \\
-        \bottomrule
-    \end{tabular}
+  \centering
+  \caption{Categorie di errore dell'esperimento 13 sulla validazione.}
+  \label{tab:errors}
+  \small\begin{tabular}{llrl}
+    \toprule
+    & Categoria & Numero & Significato \\
+    \midrule
+    \multirow{3}{*}{FN (411)}
+      & mancato completo & 113 & nessuna sovrapposizione predetta \\
+      & quasi corretto & 245 & esiste overlap, ma IoU $\leq0.5$ \\
+      & divisione & 53 & un'annotazione coperta da più parti \\
+    \midrule
+    \multirow{3}{*}{FP (845)}
+      & FP senza overlap & 418 & non tocca alcun pixel annotato \\
+      & non associato & 411 & esiste overlap, ma IoU $\leq0.5$ \\
+      & fusione & 16 & una previsione copre più annotazioni \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-Due avvertenze sono state verificate. Primo, gli organizzatori hanno confermato che
-le annotazioni sono \emph{incomplete}, quindi parte delle allucinazioni sono
-plausibilmente filamenti veri che uno o più annotatori hanno mancato -- misurato, i
-blob con picco di probabilità sopra $0{,}85$ sono marcati solo dal $63\%$ degli
-annotatori, e diversi blob della mappa di probabilità in
-Figura~\ref{fig:predictions} poggiano su strutture che nessun annotatore ha
-disegnato. Secondo, la struttura degli accoppiamenti che la giuria della challenge
-ispeziona è quasi uno-a-uno (Figura~\ref{fig:distributions}): su 1144 istanze
-annotate 951 sono toccate da almeno una predizione e solo 81 da più di una.
-
 \begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.86\linewidth]{../experiments/13/plots/validation_predictions.png}
-    \caption{Il modello consegnato su tre osservazioni di validazione: ground truth
-    dell'annotatore (a sinistra), mappa di probabilità predetta (al centro), istanze
-    finali all'operating point consegnato (a destra). Diversi blob nelle mappe di
-    probabilità poggiano su strutture che nessun annotatore ha disegnato.}
-    \label{fig:predictions}
+  \centering
+  \includegraphics[width=0.78\linewidth]{figures/validation_predictions_13.png}
+  \caption{Esempi di validazione dell'esperimento 13: annotazione, mappa di probabilità
+  e componenti connesse finali. Una risposta esterna a una singola annotazione può
+  essere un falso positivo oppure riflettere un disaccordo tra annotatori.}
+  \label{fig:predictions}
 \end{figure}
 
+Le distribuzioni nella Figura~\ref{fig:distributions} forniscono un'ulteriore lettura
+dello stesso risultato. Tra le coppie ground-truth/predizione sovrapposte, la IoU media
+è 0.516 e il Dice medio è 0.648. Questi valori sulle coppie non sostituiscono le metriche
+globali, perché escludono le componenti prive di associazione.
 
 \begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.98\linewidth]{../experiments/13/plots/official_distributions.png}
-    \caption{Le distribuzioni riportate dal notebook di autovalutazione degli
-    organizzatori, per il modello consegnato sulla validazione: IoU e Dice su ogni
-    coppia ground-truth/predizione sovrapposta, e le relazioni many-to-one /
-    one-to-many (un hit è un qualunque overlap; il vincolo IoU $> 0{,}5$ della
-    metrica è più severo).}
-    \label{fig:distributions}
+  \centering
+  \includegraphics[width=0.84\linewidth]{figures/official_distributions_13.png}
+  \caption{Sovrapposizioni tra coppie e gradi di associazione dell'esperimento 13 sulla
+  validazione.}
+  \label{fig:distributions}
 \end{figure}
 
-\subsection{Massimizzare la PQ per la leaderboard Kaggle}
-\label{sec:kaggle}
+\subsection{Modelli più pesanti e secondo candidato finale}
+\label{sec:heavy}
 
-Messo deliberatamente da parte il bonus memoria, il problema del riconoscimento è
-stato spinto fin dove poteva andare, e la leaderboard pubblica ha inseguito la PQ
-di validazione meno un divario stabile di $0{,}072 \pm 0{,}007$ su otto submission:
-la validazione è stata una bussola affidabile per tutto lo studio. I modelli a
-$2048$ nativo a frame intero (encoder ResNet18 e ResNet34) eguagliano il campione;
-la media delle mappe di probabilità dei due modelli \emph{quasi pari, a bias
-opposto e a scala diversa} li batte entrambi in cross-selection (PQ 0,4354), dove
-ogni altro tentativo di ensemble era fallito; e appendere le rilevazioni sicure di
-un detector YOLOv8x dove l'ensemble ha lasciato pixel liberi aggiunge i filamenti
-che i modelli per pixel mancano del tutto (PQ \textbf{0,4414}, cross-validata,
-leaderboard pubblica \textbf{0,37}). Queste configurazioni usano fino a 9--39~GB in
-training e sono documentate qui come studio sulla metrica della challenge Kaggle;
-il modello che consegniamo per il project work resta l'ottimo Dice dentro il budget
-della Sezione~\ref{sec:operating}.
+Per completezza, la Tabella~\ref{tab:heavy} riporta le configurazioni che hanno
+esplorato una capacità maggiore oppure un diverso equilibrio tra Mean Dice e PQ. I
+valori di memoria sono picchi misurati, non stime ricavate dal numero di parametri.
+
+\begin{table}[H]
+  \centering
+  \caption{Candidato finale e configurazioni con costo maggiore. Il trattino indica che
+  non è disponibile o applicabile un picco separato di training o inferenza.}
+  \label{tab:heavy}
+  \small\begin{tabular}{L{0.08\linewidth}L{0.34\linewidth}rrrr}
+    \toprule
+    ID & Configurazione & Dice & PQ & Train GB & Test GB \\
+    \midrule
+    13 & U-Net ResNet18, crop nativi & \textbf{0.6762} & 0.3591 & 3.04 & 2.53 \\
+    15m & U-Net ResNet18, frame $1536^2$ & 0.6650 & 0.4153 & 2.63 & 2.53 \\
+    U1 & U-Net ResNet18, frame $2048^2$ & 0.6691 & 0.4211 & 9.20 & 4.32 \\
+    U2 & U-Net ResNet34, frame $2048^2$ & 0.6670 & 0.4282 & 9.23 & 4.36 \\
+    Y1 & YOLOv8m-seg, $1792^2$ (40 ep.) & 0.6150 & 0.4170 & 21.59 & -- \\
+    Y2 & YOLOv8m-seg, $1792^2$ (39 ep.) & 0.6181 & 0.4197 & 21.59 & -- \\
+    Y3 & YOLOv8x-seg, $1792^2$ (100 ep.) & 0.6324 & 0.4263 & 38.74 & -- \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+U1 e U2 elaborano l'intero frame alla risoluzione nativa. U2 sostituisce ResNet18 con
+ResNet34, aumentando i parametri addestrabili da 14.34 a 24.45 milioni. La PQ migliora,
+ma i picchi di training superano 9~GB e il Mean Dice resta inferiore a quello
+dell'esperimento 13.
+
+Gli esperimenti YOLO (Y1--Y3) hanno fornito una PQ discreta, ma un Mean Dice inferiore
+all'esperimento 13. Il modello più grande, Y3, raggiunge 0.4263 di PQ ma richiede 38.74~GB
+di memoria in training; per questo il ramo basato su detector non è stato scelto.
+
+L'esperimento 13 richiede circa 107 secondi per epoca e ha completato 15 epoche in 26.7
+minuti. L'inferenza su 180 immagini di test ha richiesto circa 15.3 minuti. I picchi
+misurati in training e inferenza rimangono sotto i limiti facoltativi di 5~GB e 4~GB.

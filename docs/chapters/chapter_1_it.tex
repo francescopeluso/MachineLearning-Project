@@ -1,43 +1,30 @@
 \section{Introduzione}
 \label{sec:intro}
 
-Questa relazione descrive come abbiamo progettato, addestrato e selezionato il
-modello che consegniamo per la segmentazione dei filamenti solari nelle immagini
-H-alpha, e anche quali ipotesi abbiamo provato e dovuto respingere lungo il
-percorso.
+La segmentazione automatica dei filamenti solari richiede di individuare strutture
+sottili e poco contrastate all'interno di immagini dell'intero disco solare. Il problema
+è reso più difficile dal forte sbilanciamento tra foreground e sfondo, dalla variabilità
+nella forma e nella dimensione dei filamenti e dalla presenza di più annotazioni per la
+stessa osservazione. Una previsione utile deve quindi riconoscere i pixel appartenenti ai
+filamenti senza produrre un numero eccessivo di regioni spurie o frammentate.
 
-Due fatti hanno condizionato quasi tutte le nostre decisioni. Primo, \textbf{le annotazioni sono
-soggettive}: ogni osservazione è stata tracciata da un massimo di tre esperti che
-concordano tra loro solo fino a un Dice di $0{,}62$, quindi parte dell'errore che
-misuriamo è disaccordo tra esperti e non errore del modello. Secondo, \textbf{sono in gioco due
-punteggi diversi}: la traccia del project work valuta il Mean Dice, mentre la
-challenge Kaggle ordina la sua leaderboard con la Panoptic Quality (PQ). La
-configurazione consegnata è ottimizzata per il primo; la seconda è studiata a
-parte, nella Sezione~\ref{sec:kaggle}.
+Il lavoro ha l'obiettivo di costruire una pipeline riproducibile per la segmentazione
+delle immagini e la successiva estrazione delle singole istanze. Il modello di base è
+una U-Net con encoder ResNet18 pre-addestrato, scelta per combinare informazioni
+semantiche e dettaglio spaziale. Il Mean Dice costituisce la metrica principale, mentre
+la Panoptic Quality (PQ) viene usata per valutare anche il riconoscimento delle istanze.
+Sono inoltre misurati il consumo di memoria GPU e il tempo di esecuzione, poiché la
+soluzione deve poter essere addestrata e utilizzata con risorse limitate.
 
-I contributi principali sono:
+Durante lo sviluppo sono state eseguite \textbf{22 configurazioni sperimentali}. La
+relazione non riporta tutti i relativi log e risultati, ma approfondisce gli otto
+esperimenti numerati che hanno determinato le principali scelte progettuali. Sono inoltre
+confrontate le varianti U1 e U2 a piena risoluzione e i tre esperimenti con detector
+YOLO. In questo modo è possibile ricostruire il passaggio dalla baseline al modello
+consegnato, includendo anche le alternative che hanno migliorato la PQ a fronte di un
+costo computazionale maggiore.
 
-\begin{itemize}\itemsep0pt
-    \item una U-Net con encoder ResNet18 pre-addestrato che raggiunge
-          \textbf{Dice 0,6815} in validazione, sopra l'accordo inter-annotatore,
-          dentro il budget GPU opzionale (3,04~GB in training, 2,50~GB in
-          inferenza);
-    \item una pipeline di valutazione che reimplementa la PQ della challenge ed è
-          verificata contro il codice degli organizzatori a $3\times10^{-8}$, così
-          ogni numero di validazione è direttamente confrontabile con la
-          leaderboard;
-    \item uno stadio di post-processing i cui quattro iper-parametri sono cercati a
-          griglia congiuntamente sul validation set -- vale più della maggior parte
-          delle modifiche all'addestramento e non costa un minuto di training;
-    \item un registro di falsificazioni: quindici run di addestramento e una
-          dozzina di meccanismi post-hoc misurati e, in gran parte, respinti,
-          insieme a una soglia di rumore misurata sotto la quale un guadagno in
-          validazione non è credibile.
-\end{itemize}
-
-La Sezione~\ref{sec:background} richiama gli ingredienti e le metriche, la
-Sezione~\ref{sec:data} i dati e il protocollo di valutazione, la
-Sezione~\ref{sec:method} il modello e il suo addestramento, la
-Sezione~\ref{sec:design} come sono stati pianificati gli esperimenti, la
-Sezione~\ref{sec:results} cosa hanno prodotto, la Sezione~\ref{sec:error} dove vive
-l'errore residuo, e la Sezione~\ref{sec:conclusions} conclude.
+Le sezioni successive definiscono le metriche e il protocollo di validazione, descrivono
+l'architettura e il training, quindi discutono gli esperimenti più significativi. La
+parte finale analizza gli errori, il costo computazionale e i limiti principali della
+soluzione.

@@ -1,50 +1,46 @@
-\section{Background: predizione densa e metriche a istanze}
+\section{Criteri di valutazione}
 \label{sec:background}
 
-\subsection{Predizione densa}
+\subsection{Mean Dice}
 
-Una CNN di classificazione risponde a una domanda per immagine: i suoi stadi di
-pooling scartano progressivamente \emph{dove} stanno le cose per decidere
-\emph{cosa} è l'immagine. La segmentazione chiede l'opposto -- una decisione per
-pixel -- quindi il dettaglio spaziale buttato dall'encoder va ricostruito. Un
-decoder di convoluzioni trasposte può riportare il collo di bottiglia a piena
-risoluzione, ma per strutture larghe pochi pixel non basta: arrivato al collo di
-bottiglia, un filamento sottile è già stato eliminato dal pooling e nessun
-upsampling può reinventarlo. La \textbf{U-Net}~\cite{unet} risolve esattamente
-questo con le skip connection che copiano ogni stadio dell'encoder nello stadio del
-decoder alla stessa risoluzione: il dettaglio fine viaggia \emph{attorno} al collo
-di bottiglia invece che attraverso. Per filamenti scuri, sottili e allungati quelle
-skip non sono una rifinitura: sono il motivo per cui la predizione esiste.
-
-L'encoder non deve essere addestrato da zero. Le reti residuali~\cite{resnet}
-pre-addestrate su ImageNet~\cite{imagenet} forniscono filtri generali di bordi e
-texture, cosa che conta quando il training set è piccolo.
-
-\subsection{Metriche a istanze}
-
-Due maschere $P$ e $G$ si confrontano con l'Intersection over Union o con il
-coefficiente di Dice, strettamente imparentato,
-%
+Per il record di validazione $i$, $\Omega_i=\{1,\ldots,H_i\}\times
+\{1,\ldots,W_i\}$ è l'insieme delle coordinate dei pixel di un'immagine alta $H_i$ e
+larga $W_i$, cioè il suo dominio discreto. Siano $P_i\subseteq\Omega_i$ la maschera di
+foreground predetta e $G_i\subseteq\Omega_i$ l'unione delle istanze annotate. Il
+coefficiente Dice è definito come
 \begin{equation}
-\mathrm{IoU}(P,G) = \frac{|P \cap G|}{|P \cup G|},
-\qquad
-\mathrm{Dice}(P,G) = \frac{2\,|P \cap G|}{|P| + |G|},
+D_i=\frac{2|P_i\cap G_i|+\varepsilon}
+{|P_i|+|G_i|+\varepsilon},
 \end{equation}
-%
-entrambe misure a livello di pixel. La \textbf{Panoptic Quality}~\cite{panoptic}
-valuta invece oggetti: istanze predette e annotate vengono accoppiate quando la
-loro IoU supera $0{,}5$, e
-%
+dove $\varepsilon$ evita una divisione per zero. Quando entrambe le maschere sono vuote,
+l'implementazione assegna $D_i=1$. Sugli $N$ record annotatore-immagine del validation
+set, la metrica riportata è
 \begin{equation}
-\mathrm{PQ}
- = \underbrace{\frac{\sum_{\mathrm{TP}} \mathrm{IoU}}{|\mathrm{TP}|}}_{\mathrm{SQ}}
-   \times
-   \underbrace{\frac{|\mathrm{TP}|}
-        {|\mathrm{TP}| + \tfrac{1}{2}|\mathrm{FP}| + \tfrac{1}{2}|\mathrm{FN}|}}_{\mathrm{RQ}},
+\mathrm{Mean\ Dice}=\frac{1}{N}\sum_{i=1}^{N}D_i.
 \end{equation}
-%
-qualità della segmentazione per qualità del riconoscimento. È la fattorizzazione a
-rendere la PQ diagnostica: SQ dice quanto bene si sovrappongono le maschere
-accoppiate, RQ quanti oggetti vengono trovati. Le due metriche divergono in modo
-informativo: una predizione frammentata o rumorosa muove appena il Dice e distrugge
-RQ.
+Questa misura sulla maschera unita è adatta al forte sbilanciamento tra le classi, perché
+non premia i pixel di sfondo classificati correttamente. Tuttavia, non descrive come il
+foreground sia diviso in oggetti distinti: un filamento frammentato in più componenti
+può comunque conservare una sovrapposizione elevata a livello di pixel.
+
+\subsection{Panoptic Quality}
+
+La PQ viene quindi impiegata come metrica complementare a livello di istanza. Per ogni
+record annotatore-immagine, le istanze predette e annotate vengono associate quando la
+loro Intersection over Union è maggiore di 0.5. Con questa soglia, le associazioni valide
+sono uno a uno. Le corrispondenze corrette e le istanze predette o annotate non associate
+vengono accumulate sull'intero validation set come TP, FP e FN. La metrica è
+\begin{equation}
+\mathrm{PQ}=
+\underbrace{\frac{\sum_{(p,g)\in\mathrm{TP}}\mathrm{IoU}(p,g)}{|\mathrm{TP}|}}_{\mathrm{SQ}}
+\times
+\underbrace{\frac{|\mathrm{TP}|}{|\mathrm{TP}|+\tfrac12|\mathrm{FP}|+\tfrac12|\mathrm{FN}|}}_{\mathrm{RQ}}.
+\end{equation}
+La Segmentation Quality (SQ) misura la sovrapposizione media delle istanze associate,
+mentre la Recognition Quality (RQ) penalizza le istanze mancanti e quelle spurie. La
+distinzione è importante in questo studio, perché configurazioni con Mean Dice simile
+possono produrre numeri diversi di componenti frammentate o false positive.
+
+Le due metriche vengono riportate per un operating point definito in modo esplicito. In
+particolare, il miglior Dice di una configurazione di output non viene mai combinato con
+la miglior PQ di un'altra.

@@ -1,56 +1,68 @@
-\section{Disegno sperimentale}
+\section{Strategia sperimentale}
 \label{sec:design}
 
-Gli esperimenti non sono una cronologia. Prima di addestrare qualunque cosa, le
-osservazioni della Sezione~\ref{sec:data} sono state trasformate in una lista
-ordinata di ipotesi, ognuna delle quali cambia esattamente una variabile ed è
-falsificabile da un singolo numero:
+\subsection{Ipotesi e criteri decisionali}
 
-\begin{enumerate}\itemsep0pt
-    \item un encoder--decoder standard trova già i filamenti principali, e dà una
-          baseline con cui vale la pena confrontarsi;
-    \item con meno di 500 osservazioni il vincolo attivo è l'encoder, quindi le
-          feature ImageNet devono battere l'inizializzazione casuale;
-    \item il Dice è cieco alla frammentazione, quindi una loss che non lo è --
-          Tversky più clDice -- deve alzare la PQ dove il Dice non può;
-    \item parte di ciò che resta è il \emph{dominio} H-alpha, non la loss;
-    \item ciò che limita il punteggio è la \emph{scala}: a $512 \times 512$ un
-          filamento largo sei pixel nativi ne diventa uno e mezzo.
-\end{enumerate}
-
-Le ipotesi 3 e 5 fanno previsioni opposte su dove viva l'errore residuo, e solo una
-sopravvive al contatto con i dati. Le ipotesi successive sono state derivate allo
-stesso modo, ciascuna dall'analisi dell'errore del run precedente.
-
-Due regole hanno tenuto onesto lo studio. Un candidato viene confrontato con il
-migliore precedente solo \emph{al proprio operating point}, ricercato da capo,
-perché una loss o una risoluzione diversa spostano la calibrazione e riutilizzare
-una vecchia soglia falsificherebbe una buona idea per il motivo sbagliato. E un
-guadagno si crede solo se sopravvive alla \textbf{cross-selection}: l'operating
-point viene scelto su metà dei file di validazione e valutato sull'altra metà.
-Misurato così, su 169 voci di annotazione, \textbf{ogni guadagno sotto
-$\approx 0{,}005$ è indistinguibile dal rumore di selezione} -- una soglia che ha
-poi ucciso tre meccanismi i cui numeri aggregati sembravano positivi.
-
-Prima di iniziare abbiamo anche scritto cosa avremmo esplorato e quanto sarebbe
-costato, in modo che lo studio entrasse nel tempo a disposizione
-(Tabella~\ref{tab:plan}).
+Il piano sperimentale è stato definito intorno a un numero limitato di ipotesi. A ogni
+ipotesi è stato associato un confronto misurabile e una decisione ricavabile dal
+risultato. La Tabella~\ref{tab:plan} riassume questa struttura.
 
 \begin{table}[ht]
-    \centering
-    \caption{Il piano: cosa abbiamo deciso di esplorare e il costo di un run.}
-    \label{tab:plan}
-    \small\begin{tabular}{lll}
-        \toprule
-        Cosa esploriamo & Valori considerati & Costo \\
-        \midrule
-        risoluzione d'ingresso & 512, 1024, 1536, 2048 nativo & 10--35 min / run \\
-        encoder                & U-Net da zero, ResNet18, ResNet34 & 10--35 min / run \\
-        loss                   & BCE+Dice, +Tversky, +clDice, Dice per istanza, \texttt{pos\_weight} & 15--30 min / run \\
-        augmentation           & simmetrie D4, jitter fotometrico, scale jitter & incluso sopra \\
-        paradigma              & U-Net per pixel vs.\ detector YOLOv8 & 30 min -- 2,5 h / run \\
-        post-processing        & soglia, chiusura, dim.\ minima, gate & 10 min, senza training \\
-        \bottomrule
-    \end{tabular}
+  \centering
+  \caption{Ipotesi usate per guidare il lavoro sperimentale.}
+  \label{tab:plan}
+  \small\begin{tabular}{L{0.29\linewidth}L{0.31\linewidth}L{0.29\linewidth}}
+    \toprule
+    Ipotesi & Verifica & Criterio decisionale \\
+    \midrule
+    Le feature pre-addestrate sono utili sul dataset annotato, di dimensioni limitate.
+      & Confrontare una U-Net addestrata da zero con un encoder ResNet18.
+      & Mantenere il transfer learning solo in presenza di un Dice migliore. \\
+    La frammentazione dipende soprattutto dalla funzione di loss.
+      & Introdurre Tversky e clDice mantenendo la bassa risoluzione.
+      & Conservare la loss specializzata solo se migliorano Dice e PQ. \\
+    I filamenti sottili vengono persi durante il downsampling.
+      & Aumentare l'input da 512 a 1024 e poi a 1536 pixel.
+      & Preferire la scala che migliora il riconoscimento a un costo accettabile. \\
+    Il contesto del disco e il dettaglio nativo producono errori diversi.
+      & Confrontare immagini intere ridimensionate e crop a risoluzione nativa.
+      & Valutare insieme Dice, PQ e categorie di errore sulle istanze. \\
+    Il training ad alta risoluzione può rispettare i limiti di memoria.
+      & Sostituire il batch fisico di 2 con due micro-batch accumulati.
+      & Accettare la modifica se la qualità resta simile e la memoria diminuisce. \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
+Durante lo studio sono state eseguite 22 configurazioni. La relazione ne riporta
+solo gli otto esperimenti numerati che hanno fornito evidenze
+per le ipotesi precedenti; le U-Net a piena risoluzione e gli esperimenti con detector
+YOLO sono confrontati separatamente nella Sezione~\ref{sec:heavy}.
+
+Nel primo esperimento con transfer learning è stato modificato anche il learning rate,
+mentre le
+risoluzioni più elevate richiedono impostazioni di memoria diverse. I risultati
+consentono quindi di prendere decisioni progettuali, ma non sempre permettono di
+attribuire l'intera differenza di punteggio a una singola variabile.
+
+Tutti i punteggi finali sono ricalcolati alla risoluzione nativa e i parametri di output
+sono scelti esclusivamente sui dati di validazione.
+
+In alcuni esperimenti il seed di training è stato cambiato un paio di volte, mantenendo
+invariato lo split. I risultati ottenuti sono rimasti pressoché invariati, suggerendo una
+variabilità limitata per le configurazioni considerate.
+
+\subsection{Alternative non mantenute}
+
+Le principali alternative considerate e poi scartate sono:
+
+\begin{itemize}
+\setlength{\itemsep}{0.1em}
+\item \textbf{Loss alternative:} le varianti topologiche, soft e bilanciate per istanza non hanno dato un guadagno stabile.
+\item \textbf{Scale jitter:} vantaggi ridotti e non costanti tra le prove.
+\item \textbf{Post-processing:} la cascata detect-then-refine e l'unione delle componenti hanno aumentato complessità o rischio di fusione.
+\item \textbf{Encoder ResNet34:} memoria aggiuntiva senza aumento del Mean Dice.
+\item \textbf{Detector:} PQ più alta, ma Mean Dice inferiore e costo maggiore.
+\end{itemize}
+
+Questi risultati hanno orientato la scelta della scala dell'input e dell'architettura finale.
